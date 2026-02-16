@@ -234,6 +234,41 @@ def annualized_vol(series: pd.Series) -> float:
     return float(rets.std() * np.sqrt(252))
 
 
+def calc_atr_proxy(series: pd.Series, window: int = 14) -> float:
+    # OHLC 없는 경우 close 기반 ATR 유사치(절대 수익률 평균)
+    rets = series.pct_change().abs().dropna()
+    if len(rets) < window:
+        return float(rets.mean()) if len(rets) else 0.0
+    return float(rets.tail(window).mean())
+
+
+def technical_fallback_plan(last: float, series: pd.Series, mode: str = "balanced") -> Dict:
+    ma20 = float(series.rolling(20).mean().iloc[-1])
+    ma50 = float(series.rolling(50).mean().iloc[-1])
+    atrp = calc_atr_proxy(series, 14)
+
+    support = min(ma20, ma50)
+    resistance = max(ma20, ma50)
+
+    if mode == "aggressive":
+        stop = min(last * (1 - max(atrp * 2.2, 0.07)), support * 0.985)
+        tp1 = max(last * (1 + max(atrp * 2.4, 0.08)), resistance * 1.02)
+        tp2 = max(last * (1 + max(atrp * 3.8, 0.14)), resistance * 1.06)
+    else:
+        stop = min(last * (1 - max(atrp * 1.6, 0.05)), support * 0.99)
+        tp1 = max(last * (1 + max(atrp * 1.8, 0.06)), resistance * 1.01)
+        tp2 = max(last * (1 + max(atrp * 2.8, 0.1)), resistance * 1.04)
+
+    return {
+        "atrProxyPct": round(atrp * 100, 2),
+        "support": round(support, 2),
+        "resistance": round(resistance, 2),
+        "stopLoss": round(stop, 2),
+        "takeProfit1": round(tp1, 2),
+        "takeProfit2": round(tp2, 2),
+    }
+
+
 def macro_regime() -> Dict[str, float]:
     vix_s = safe_download(MACRO_SYMBOLS["VIX"], "3mo")
     dxy_s = safe_download(MACRO_SYMBOLS["DXY"], "3mo")
@@ -275,7 +310,7 @@ def buy_guide(category: str) -> Dict[str, str]:
     return {"where": "증권/거래 플랫폼 확인", "note": "유동성/수수료 확인"}
 
 
-def make_plan(asset: Asset, last: float, expected_3m: float, vol: float, mode: str = "balanced") -> Dict:
+def make_plan(asset: Asset, last: float, expected_3m: float, vol: float, prices: pd.Series, consensus: Dict, mode: str = "balanced") -> Dict:
     entry_low = last * 0.985
     entry_high = last * 1.015
 
@@ -294,7 +329,7 @@ def make_plan(asset: Asset, last: float, expected_3m: float, vol: float, mode: s
 
     guide = buy_guide(asset.category)
 
-    return {
+    base_plan = {
         "whereToBuy": guide["where"],
         "executionNote": guide["note"],
         "entryZone": [round(entry_low, 2), round(entry_high, 2)],
@@ -303,8 +338,19 @@ def make_plan(asset: Asset, last: float, expected_3m: float, vol: float, mode: s
         "takeProfit2": round(last * (1 + tp2_pct / 100), 2),
         "holdingPeriod": holding,
         "rebalancingRule": "주 1회 점검, 점수 하락(상위 5위 이탈) 시 비중 축소",
-        "positionSizing": sizing
+        "positionSizing": sizing,
+        "planBasis": "consensus+volatility",
     }
+
+    if consensus.get("status") in {"empty", "error"}:
+        tech = technical_fallback_plan(last, prices, mode=mode)
+        base_plan["stopLoss"] = tech["stopLoss"]
+        base_plan["takeProfit1"] = tech["takeProfit1"]
+        base_plan["takeProfit2"] = tech["takeProfit2"]
+        base_plan["planBasis"] = "technical-fallback"
+        base_plan["technical"] = tech
+
+    return base_plan
 
 
 def build_why(asset: Asset, m1: float, m3: float, m6: float, trend: float, regime_bias: float, vol: float, dd: float, news_score: int, consensus: Dict) -> List[str]:
@@ -327,6 +373,8 @@ def build_why(asset: Asset, m1: float, m3: float, m6: float, trend: float, regim
         reasons.append(f"애널리스트 평균 목표가 대비 괴리율은 {consensus.get('upsidePct')}% 입니다.")
     if consensus.get("recommendationMean") is not None:
         reasons.append(f"애널리스트 평균 추천지수는 {consensus.get('recommendationMean')} (낮을수록 우호)입니다.")
+    if consensus.get("status") in {"empty", "error"}:
+        reasons.append("컨센서스 부재 구간은 기술적 레벨(지지/저항/ATR 유사치)로 보완했습니다.")
 
     if not reasons:
         reasons.append("상대점수 기반으로 상위권에 올라 추천 후보로 선정되었습니다.")
@@ -400,7 +448,7 @@ def score_asset(asset: Asset, prices: pd.Series, risk_on: float, mode: str = "ba
             "lookback": "1y daily close",
             "macroInputs": [MACRO_SYMBOLS["VIX"], MACRO_SYMBOLS["DXY"]]
         },
-        "plan": make_plan(asset, last, float(expected_3m), vol, mode=mode),
+        "plan": make_plan(asset, last, float(expected_3m), vol, prices, consensus, mode=mode),
         "links": {
             "yahoo": f"https://finance.yahoo.com/quote/{asset.symbol}",
             "tradingview": f"https://www.tradingview.com/symbols/{asset.symbol.replace('-', '')}/",

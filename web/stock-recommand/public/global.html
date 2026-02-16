@@ -84,6 +84,8 @@ async function loadData(){
       <div>손절가: ${x.plan?.stopLoss}</div>
       <div>1차 익절: ${x.plan?.takeProfit1}</div>
       <div>2차 익절: ${x.plan?.takeProfit2}</div>
+      <div>계획 산출방식: ${x.plan?.planBasis || '-'}</div>
+      ${(x.plan?.technical) ? `<div>기술 대체근거: ATR유사 ${x.plan.technical.atrProxyPct}% / 지지 ${x.plan.technical.support} / 저항 ${x.plan.technical.resistance}</div>` : ''}
       <div>보유기간: ${x.plan?.holdingPeriod}</div>
       <div>매수방법: ${x.plan?.whereToBuy}</div>
       <div>집행메모: ${x.plan?.executionNote}</div>
