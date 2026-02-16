@@ -3,37 +3,47 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>유망 종목 레이더</title>
+  <title>유망 종목 레이더 v2</title>
   <style>
     body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; margin: 0; background: #0f172a; color: #e2e8f0; }
-    .wrap { max-width: 1100px; margin: 0 auto; padding: 24px; }
+    .wrap { max-width: 1200px; margin: 0 auto; padding: 24px; }
     h1 { margin: 0 0 8px; }
     .muted { color: #94a3b8; font-size: 14px; }
     .card { background: #111827; border: 1px solid #1f2937; border-radius: 16px; padding: 16px; margin-top: 16px; }
     .top { display: grid; grid-template-columns: 1.2fr 1fr; gap: 16px; }
     .score { font-size: 42px; font-weight: 800; color: #22d3ee; }
     .symbol { font-size: 24px; font-weight: 700; }
-    .btn { margin-top: 12px; background: #2563eb; border: 0; color: white; padding: 10px 14px; border-radius: 10px; cursor: pointer; }
+    .btn { background: #2563eb; border: 0; color: white; padding: 10px 14px; border-radius: 10px; cursor: pointer; }
     .btn:hover { background: #1d4ed8; }
+    .controls { display: flex; gap: 10px; margin-top: 12px; flex-wrap: wrap; }
+    input, select { background: #0b1222; border: 1px solid #374151; color: #e2e8f0; border-radius: 8px; padding: 8px; }
     table { width: 100%; border-collapse: collapse; margin-top: 12px; }
     th, td { text-align: left; border-bottom: 1px solid #1f2937; padding: 10px; font-size: 14px; vertical-align: top; }
     th { color: #93c5fd; }
     .small { font-size: 12px; color: #94a3b8; }
     ul { margin: 6px 0 0; padding-left: 16px; }
     li { margin-bottom: 4px; }
+    .good { color: #34d399; }
+    .bad { color: #f87171; }
     @media (max-width: 880px) { .top { grid-template-columns: 1fr; } }
   </style>
 </head>
 <body>
   <div class="wrap">
-    <h1>📈 유망 종목 레이더</h1>
-    <div class="muted">네이버 금융 리서치 리포트를 실시간 수집해 현재 유망 종목을 자동 집계합니다.</div>
-    <button class="btn" onclick="loadData()">지금 새로 분석</button>
+    <h1>📈 유망 종목 레이더 v2</h1>
+    <div class="muted">리포트 감성 + 정량지표(목표가/추천/성장/모멘텀/밸류에이션) 하이브리드 점수</div>
+
+    <div class="controls">
+      <label>Top N <select id="top"><option>5</option><option selected>10</option><option>20</option></select></label>
+      <label>최소 리포트 수 <select id="minReports"><option selected>1</option><option>2</option><option>3</option></select></label>
+      <label>검색 <input id="q" placeholder="종목명/코드" /></label>
+      <button class="btn" onclick="loadData()">필터 적용</button>
+    </div>
 
     <div id="topPick" class="card">불러오는 중...</div>
 
     <div class="card">
-      <h3 style="margin-top:0">랭킹 TOP 10</h3>
+      <h3 style="margin-top:0">랭킹</h3>
       <div id="tableWrap"></div>
     </div>
 
@@ -41,10 +51,16 @@
   </div>
 
   <script>
-    const fmt = (v) => (v === null || v === undefined) ? '-' : Number(v).toLocaleString();
+    const fmt = (v, d=2) => (v === null || v === undefined) ? '-' : Number(v).toLocaleString(undefined, { maximumFractionDigits: d });
+    const pct = (v) => {
+      if (v === null || v === undefined) return '-';
+      const cls = v >= 0 ? 'good' : 'bad';
+      const sign = v > 0 ? '+' : '';
+      return `<span class="${cls}">${sign}${fmt(v)}%</span>`;
+    };
 
     function renderTop(top) {
-      if (!top) return '<b>데이터를 가져오지 못했습니다.</b>';
+      if (!top) return '<b>필터 조건의 데이터가 없습니다.</b>';
 
       const reports = (top.recentReports || []).map(r =>
         `<li>${r.title} <span class="small">(${r.broker})</span></li>`
@@ -54,14 +70,16 @@
         <div class="top">
           <div>
             <div class="symbol">#1 ${top.name} (${top.code})</div>
-            <div class="score">${top.score}</div>
-            <div class="muted">Composite Score</div>
+            <div class="score">${fmt(top.score)}</div>
+            <div class="muted">Final Score (Sentiment 45% + Quant 55%)</div>
           </div>
           <div>
             <div>리포트 언급수: <b>${top.reportCount}회</b></div>
-            <div>평균 감성점수: <b>${top.avgSentiment}</b></div>
-            <div>증권사 다양성: <b>${top.brokerDiversity}곳</b></div>
-            <div>현재가: <b>${fmt(top.snapshot?.price)}원</b></div>
+            <div>감성 점수: <b>${fmt(top.sentimentScore)}</b></div>
+            <div>정량 점수: <b>${fmt(top.quantScore)}</b></div>
+            <div>현재가: <b>${fmt(top.snapshot?.price, 0)}원</b></div>
+            <div>목표가: <b>${fmt(top.quant?.metrics?.targetPrice)}</b></div>
+            <div>상승여력: ${pct(top.quant?.metrics?.upsidePct)}</div>
             <div style="margin-top:8px">최근 리포트:</div>
             <ul>${reports}</ul>
           </div>
@@ -70,8 +88,7 @@
     }
 
     function renderTable(rows) {
-      const top10 = rows.slice(0, 10);
-      const body = top10.map((r, i) => {
+      const body = rows.map((r, i) => {
         const links = (r.recentReports || []).slice(0, 2).map(x =>
           `<li>${x.title} <span class="small">(${x.broker})</span></li>`
         ).join('');
@@ -80,10 +97,12 @@
           <tr>
             <td>${i + 1}</td>
             <td><b>${r.name}</b><br><span class="small">${r.code}</span></td>
-            <td>${r.score}</td>
+            <td>${fmt(r.score)}</td>
+            <td>${fmt(r.sentimentScore)}</td>
+            <td>${fmt(r.quantScore)}</td>
             <td>${r.reportCount}</td>
-            <td>${r.avgSentiment}</td>
-            <td>${fmt(r.snapshot?.price)}원</td>
+            <td>${pct(r.quant?.metrics?.upsidePct)}</td>
+            <td>${pct(r.quant?.metrics?.momentum90dPct)}</td>
             <td><ul>${links}</ul></td>
           </tr>
         `;
@@ -95,10 +114,12 @@
             <tr>
               <th>#</th>
               <th>종목</th>
-              <th>점수</th>
-              <th>언급수</th>
+              <th>최종점수</th>
               <th>감성</th>
-              <th>현재가</th>
+              <th>정량</th>
+              <th>언급수</th>
+              <th>상승여력</th>
+              <th>90일 모멘텀</th>
               <th>최근 코멘트</th>
             </tr>
           </thead>
@@ -112,12 +133,17 @@
       const tableEl = document.getElementById('tableWrap');
       const footEl = document.getElementById('foot');
 
-      topEl.innerHTML = '분석 중... (약 5~10초)';
+      const top = document.getElementById('top').value;
+      const minReports = document.getElementById('minReports').value;
+      const q = document.getElementById('q').value.trim();
+
+      topEl.innerHTML = '분석 중... (약 10~25초)';
       tableEl.innerHTML = '';
       footEl.textContent = '';
 
       try {
-        const res = await fetch('/api/picks');
+        const params = new URLSearchParams({ top, minReports, q });
+        const res = await fetch(`/api/picks?${params.toString()}`);
         const data = await res.json();
 
         topEl.innerHTML = renderTop(data.topPick);

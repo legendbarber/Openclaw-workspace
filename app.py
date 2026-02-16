@@ -1,9 +1,10 @@
-from flask import Flask, jsonify, send_from_directory
+from flask import Flask, jsonify, send_from_directory, request
 from collections import defaultdict
 from datetime import datetime
 import html
 import re
 import urllib.request
+import yfinance as yf
 
 app = Flask(__name__, static_folder='public')
 
@@ -18,6 +19,18 @@ NEGATIVE_KEYWORDS = [
     '둔화', '부진', '하향', '부담', '우려', '악화', '조정', '감소', '약세',
     '리스크', '비용', '조롱', '하락'
 ]
+
+RATING_SCORE = {
+    'strong_buy': 100,
+    'buy': 80,
+    'hold': 45,
+    'underperform': 20,
+    'sell': 0
+}
+
+
+def clamp(v, low, high):
+    return min(high, max(low, v))
 
 
 def fetch_text(url: str, encoding='euc-kr'):
@@ -38,7 +51,7 @@ def sentiment_score(title: str):
     return p - n
 
 
-def scrape_reports(limit=80):
+def scrape_reports(limit=100):
     s = fetch_text(COMPANY_LIST_URL)
     rows = re.findall(r'<tr>(.*?)</tr>', s, re.S)
     out = []
@@ -82,18 +95,106 @@ def fetch_stock_snapshot(code: str):
     if sec_ex:
         blind_vals = re.findall(r'<span class="blind">([^<]+)</span>', sec_ex.group(1))
         if blind_vals:
-            # 예: 상승, 1,400 형태라 마지막 숫자 값 사용
-            nums = [x.strip() for x in blind_vals if re.search(r'[\d,]+', x)]
+            nums = [x.strip() for x in blind_vals if re.search(r'[\d,\.]+', x)]
             if nums:
                 change = nums[-1]
 
-    return {
-        'price': price,
-        'changeText': change
-    }
+    return {'price': price, 'changeText': change}
 
 
-def build_rankings(reports):
+def calc_rating_score(rec_key, rec_mean):
+    base = RATING_SCORE.get(rec_key, 50)
+    if rec_mean is not None and 1 <= rec_mean <= 5:
+        mean_score = clamp(((5 - rec_mean) / 4) * 100, 0, 100)
+        return (base * 0.55) + (mean_score * 0.45)
+    return base
+
+
+def pct(v):
+    if v is None:
+        return None
+    return round(v * 100, 2)
+
+
+def fetch_quant_metrics(code: str):
+    symbols = [f'{code}.KS', f'{code}.KQ']
+
+    for symbol in symbols:
+        try:
+            t = yf.Ticker(symbol)
+            info = t.info or {}
+            hist = t.history(period='1y')
+
+            if hist is None or hist.empty:
+                continue
+
+            closes = hist['Close'].dropna().tolist()
+            if len(closes) < 30:
+                continue
+
+            latest = float(closes[-1])
+            p90 = float(closes[-min(91, len(closes))])
+            p252 = float(closes[-min(253, len(closes))])
+            m90 = (latest / p90) - 1 if p90 else 0
+            m252 = (latest / p252) - 1 if p252 else 0
+
+            current = info.get('currentPrice') or latest
+            target = info.get('targetMeanPrice')
+            upside = ((target / current) - 1) if (target and current) else None
+
+            rec_key = info.get('recommendationKey')
+            rec_mean = info.get('recommendationMean')
+            analyst_score = calc_rating_score(rec_key, rec_mean)
+            upside_score = 50 if upside is None else clamp((upside + 0.2) * 250, 0, 100)
+
+            growth = info.get('earningsGrowth') or 0
+            revenue_growth = info.get('revenueGrowth') or 0
+            roe = info.get('returnOnEquity') or 0
+            margin = info.get('profitMargins') or 0
+            quality_raw = (growth * 40) + (revenue_growth * 30) + (roe * 20) + (margin * 10)
+            quality_score = clamp((quality_raw + 10) * 3.2, 0, 100)
+
+            momentum_raw = (m90 * 0.45) + (m252 * 0.55)
+            momentum_score = clamp((momentum_raw + 0.2) * 250, 0, 100)
+
+            pe = info.get('trailingPE') or info.get('forwardPE')
+            valuation_score = 50
+            if pe and pe > 0:
+                valuation_score = clamp(100 - ((pe - 10) * 2), 0, 100)
+
+            quant_score = (
+                analyst_score * 0.32 +
+                upside_score * 0.23 +
+                quality_score * 0.22 +
+                momentum_score * 0.15 +
+                valuation_score * 0.08
+            )
+
+            return {
+                'symbol': symbol,
+                'score': round(quant_score, 2),
+                'metrics': {
+                    'currentPrice': current,
+                    'targetPrice': target,
+                    'upsidePct': None if upside is None else round(upside * 100, 2),
+                    'recommendationKey': rec_key,
+                    'recommendationMean': rec_mean,
+                    'trailingPE': pe,
+                    'earningsGrowthPct': pct(growth),
+                    'revenueGrowthPct': pct(revenue_growth),
+                    'roePct': pct(roe),
+                    'profitMarginPct': pct(margin),
+                    'momentum90dPct': round(m90 * 100, 2),
+                    'momentum1yPct': round(m252 * 100, 2)
+                }
+            }
+        except Exception:
+            continue
+
+    return None
+
+
+def build_rankings(reports, q_filter='', min_reports=1):
     grouped = defaultdict(list)
     for r in reports:
         grouped[r['code']].append(r)
@@ -102,72 +203,93 @@ def build_rankings(reports):
 
     for code, rows in grouped.items():
         name = rows[0]['name']
+        if q_filter and q_filter not in name and q_filter not in code:
+            continue
+
         count = len(rows)
+        if count < min_reports:
+            continue
 
         sentiments = [sentiment_score(x['title']) for x in rows]
         avg_sent = sum(sentiments) / len(sentiments)
-
-        # 최신에 가까울수록 가점 (목록 상단일수록 최근)
         recency = sum(max(0, 100 - x['rank']) for x in rows) / len(rows)
-
-        # 브로커 다양성(여러 증권사에서 동시에 언급되면 신뢰도 소폭 가점)
         broker_div = len({x['broker'] for x in rows if x['broker']})
 
-        score = (
+        sentiment_composite = (
             count * 12 +
             avg_sent * 18 +
             recency * 0.35 +
             broker_div * 5
         )
+        sentiment_norm = clamp(sentiment_composite, 0, 140) / 140 * 100
 
-        recent_titles = [
-            {
-                'title': x['title'],
-                'broker': x['broker'],
-                'date': x['date'],
-                'nid': x['nid']
-            }
-            for x in rows[:4]
-        ]
+        quant = fetch_quant_metrics(code)
+        quant_score = quant['score'] if quant else None
 
-        rankings.append({
+        if quant_score is None:
+            final_score = sentiment_norm
+        else:
+            final_score = sentiment_norm * 0.45 + quant_score * 0.55
+
+        recent_titles = [{
+            'title': x['title'],
+            'broker': x['broker'],
+            'date': x['date'],
+            'nid': x['nid']
+        } for x in rows[:4]]
+
+        row = {
             'code': code,
             'name': name,
             'reportCount': count,
             'avgSentiment': round(avg_sent, 2),
             'recency': round(recency, 2),
             'brokerDiversity': broker_div,
-            'score': round(score, 2),
-            'recentReports': recent_titles
-        })
+            'sentimentScore': round(sentiment_norm, 2),
+            'quantScore': quant_score,
+            'score': round(final_score, 2),
+            'recentReports': recent_titles,
+            'quant': quant
+        }
 
-    rankings.sort(key=lambda x: x['score'], reverse=True)
-
-    # 상위 종목은 현재가까지 붙여줌
-    for row in rankings[:10]:
         try:
-            row['snapshot'] = fetch_stock_snapshot(row['code'])
+            row['snapshot'] = fetch_stock_snapshot(code)
         except Exception:
             row['snapshot'] = {'price': None, 'changeText': None}
 
+        rankings.append(row)
+
+    rankings.sort(key=lambda x: x['score'], reverse=True)
     return rankings
 
 
 @app.route('/api/picks')
 def api_picks():
-    reports = scrape_reports(limit=80)
-    rankings = build_rankings(reports)
+    top_n = int(request.args.get('top', '10'))
+    min_reports = int(request.args.get('minReports', '1'))
+    q_filter = (request.args.get('q', '') or '').strip()
+
+    top_n = clamp(top_n, 1, 50)
+    min_reports = clamp(min_reports, 1, 10)
+
+    reports = scrape_reports(limit=120)
+    rankings = build_rankings(reports, q_filter=q_filter, min_reports=min_reports)
 
     return jsonify({
         'generatedAt': datetime.utcnow().isoformat() + 'Z',
-        'source': 'Naver Finance 리서치 리포트(인터넷 공개 데이터)',
+        'source': 'Naver Finance 리서치 + Yahoo Finance 공개 데이터',
+        'filters': {
+            'top': top_n,
+            'minReports': min_reports,
+            'q': q_filter
+        },
         'algorithm': {
-            'name': 'K-Research Sentiment Composite v1',
-            'note': '증권사 리포트 언급 빈도 + 제목 감성 점수 + 최신성 + 증권사 다양성 기반 랭킹',
+            'name': 'Hybrid Research+Quant Composite v2',
+            'note': '리포트 기반 감성점수(45%) + 정량지표 점수(55%) 결합 랭킹',
             'disclaimer': '참고용 자동 집계입니다. 투자 판단과 손익 책임은 본인에게 있습니다.'
         },
         'topPick': rankings[0] if rankings else None,
-        'rankings': rankings,
+        'rankings': rankings[:top_n],
         'rawReportCount': len(reports)
     })
 
