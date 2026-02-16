@@ -127,6 +127,26 @@ def make_plan(asset: Asset, last: float, expected_3m: float, vol: float) -> Dict
     }
 
 
+def build_why(asset: Asset, m1: float, m3: float, m6: float, trend: float, regime_bias: float, vol: float, dd: float) -> List[str]:
+    reasons = []
+    if m3 > 0:
+        reasons.append(f"최근 3개월 모멘텀이 플러스({m3*100:.2f}%)입니다.")
+    if m1 > 0:
+        reasons.append(f"최근 1개월 모멘텀이 유지되고 있습니다({m1*100:.2f}%).")
+    if trend > 0:
+        reasons.append("가격이 20/50일 이동평균 대비 우상향 추세입니다.")
+    if regime_bias > 0:
+        reasons.append("현재 매크로 레짐(리스크온/오프)에 유리한 자산군입니다.")
+    if vol < 0.28:
+        reasons.append(f"연환산 변동성이 상대적으로 관리 가능한 수준입니다({vol*100:.2f}%).")
+    if dd < 0.25:
+        reasons.append(f"과거 1년 최대낙폭이 과도하지 않은 편입니다({-dd*100:.2f}%).")
+
+    if not reasons:
+        reasons.append("상대점수 기반으로 상위권에 올라 추천 후보로 선정되었습니다.")
+    return reasons[:4]
+
+
 def score_asset(asset: Asset, prices: pd.Series, risk_on: float) -> Dict:
     m1 = pct_change(prices, 21)
     m3 = pct_change(prices, 63)
@@ -156,6 +176,7 @@ def score_asset(asset: Asset, prices: pd.Series, risk_on: float) -> Dict:
         "score": round(float(total), 2),
         "expected3mPct": round(float(expected_3m), 2),
         "currentPrice": round(last, 2),
+        "whyRecommended": build_why(asset, m1, m3, m6, trend, regime_bias, vol, dd),
         "metrics": {
             "m1Pct": round(m1 * 100, 2),
             "m3Pct": round(m3 * 100, 2),
@@ -164,6 +185,12 @@ def score_asset(asset: Asset, prices: pd.Series, risk_on: float) -> Dict:
             "maxDrawdownPct": round(-dd * 100, 2),
             "trend": round(trend, 2),
             "regimeBias": round(regime_bias, 2),
+        },
+        "source": {
+            "priceData": "Yahoo Finance (yfinance)",
+            "symbol": asset.symbol,
+            "lookback": "1y daily close",
+            "macroInputs": [MACRO_SYMBOLS["VIX"], MACRO_SYMBOLS["DXY"]]
         },
         "plan": make_plan(asset, last, float(expected_3m), vol),
         "links": {
@@ -191,6 +218,11 @@ def run_process(top_n: int = 7) -> Dict:
     return {
         "generatedAt": datetime.now(UTC).isoformat().replace("+00:00", "Z"),
         "model": "Global Multi-Asset Momentum-Regime v2",
+        "methodology": "1M/3M/6M 모멘텀 + 20/50일 추세 + 변동성/낙폭 패널티 + VIX/DXY 기반 레짐 바이어스",
+        "dataSources": [
+            "Yahoo Finance price history via yfinance",
+            f"Macro inputs: {MACRO_SYMBOLS['VIX']}, {MACRO_SYMBOLS['DXY']}"
+        ],
         "macro": regime,
         "topPicks": rows[:top_n],
         "allRankings": rows,

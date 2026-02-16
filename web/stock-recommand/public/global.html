@@ -29,7 +29,13 @@
 async function loadData(){
   const res = await fetch('/api/global-report?top=7');
   const d = await res.json();
-  document.getElementById('macro').innerHTML = `<b>생성:</b> ${new Date(d.generatedAt).toLocaleString()}<br><b>레짐:</b> risk_on=${d.macro?.risk_on}, VIX=${d.macro?.vix}, DXY 1M=${d.macro?.dxy_1m_pct}%`;
+  document.getElementById('macro').innerHTML = `
+    <b>생성:</b> ${new Date(d.generatedAt).toLocaleString()}<br>
+    <b>모델:</b> ${d.model || '-'}<br>
+    <b>레짐:</b> risk_on=${d.macro?.risk_on}, VIX=${d.macro?.vix}, DXY 1M=${d.macro?.dxy_1m_pct}%<br>
+    <b>방법론:</b> ${d.methodology || '-'}<br>
+    <b>데이터 소스:</b> ${(d.dataSources || []).join(' / ')}
+  `;
   document.getElementById('disc').innerHTML = d.disclaimer || '';
   const picks = d.topPicks || [];
   document.getElementById('picks').innerHTML = picks.map((x,i)=>`
@@ -37,6 +43,9 @@ async function loadData(){
       <h3>#${i+1} ${x.symbol} (${x.name})</h3>
       <div>카테고리: ${x.category} | 점수: <b>${x.score}</b> | 기대3개월: <b>${x.expected3mPct}%</b></div>
       <div>현재가: ${x.currentPrice}</div>
+      <div><b>왜 추천?</b></div>
+      <ul>${(x.whyRecommended || []).map(r => `<li>${r}</li>`).join('')}</ul>
+      <div><b>정보 소스</b>: ${x.source?.priceData || '-'} / 심볼: ${x.source?.symbol || '-'} / 기간: ${x.source?.lookback || '-'}</div>
       <hr>
       <div><b>운용 계획</b></div>
       <div>진입가 구간: ${x.plan?.entryZone?.[0]} ~ ${x.plan?.entryZone?.[1]}</div>
