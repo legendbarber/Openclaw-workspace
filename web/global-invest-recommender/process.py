@@ -272,8 +272,8 @@ def score_asset(asset: Asset, prices: pd.Series, risk_on: float, mode: str = "ba
     momentum_score = (m1 * 0.35 + m3 * 0.4 + m6 * 0.25) * 220
     trend_score = trend * 8
     if mode == "aggressive":
-        vol_penalty = np.clip(vol - 0.28, 0, 1.0) * 10
-        dd_penalty = np.clip(dd - 0.25, 0, 1.0) * 9
+        vol_penalty = np.clip(vol - 0.32, 0, 1.0) * 7
+        dd_penalty = np.clip(dd - 0.30, 0, 1.0) * 6
     else:
         vol_penalty = np.clip(vol - 0.22, 0, 1.0) * 18
         dd_penalty = np.clip(dd - 0.18, 0, 1.0) * 15
@@ -282,8 +282,16 @@ def score_asset(asset: Asset, prices: pd.Series, risk_on: float, mode: str = "ba
     news = fetch_news_digest(f"{asset.symbol} {asset.name}", limit=6)
     news_bonus = np.clip(news.get("sentimentScore", 0), -3, 3) * 1.5
 
-    total = momentum_score + trend_score + regime_bias - vol_penalty - dd_penalty + news_bonus
     expected_3m = (m1 * 0.30 + m3 * 0.55 + m6 * 0.15) * 100
+
+    aggressive_return_boost = 0.0
+    aggressive_risk_bonus = 0.0
+    if mode == "aggressive":
+        aggressive_return_boost = expected_3m * 0.65
+        if asset.category in {"equity", "crypto", "reit"}:
+            aggressive_risk_bonus += 6.0
+
+    total = momentum_score + trend_score + regime_bias - vol_penalty - dd_penalty + news_bonus + aggressive_return_boost + aggressive_risk_bonus
 
     return {
         "symbol": asset.symbol,

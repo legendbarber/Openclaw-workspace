@@ -20,7 +20,7 @@
     <small>전세계 자산군 자동 스코어링 + 투자운용 계획</small><br><br>
     <div><a href='/stock-recommand'>/stock-recommand</a> · <a href='/invest-recommand'>/invest-recommand</a></div><br>
     <label>전략 모드:
-      <select id='mode'>
+      <select id='mode' onchange='onModeChange()'>
         <option value='balanced' selected>밸런스</option>
         <option value='aggressive'>공격형</option>
       </select>
@@ -32,6 +32,12 @@
   </div>
 
 <script>
+function onModeChange(){
+  const mode = document.getElementById('mode').value;
+  localStorage.setItem('invest-mode', mode);
+  loadData();
+}
+
 async function loadData(){
   const mode = document.getElementById('mode').value;
   const res = await fetch(`/api/global-report?top=7&mode=${encodeURIComponent(mode)}`);
@@ -79,6 +85,12 @@ async function loadData(){
     </div>
   `).join('');
 }
+
+const savedMode = localStorage.getItem('invest-mode');
+if (savedMode && ['balanced','aggressive'].includes(savedMode)) {
+  document.getElementById('mode').value = savedMode;
+}
+
 loadData();
 </script>
 </body>
