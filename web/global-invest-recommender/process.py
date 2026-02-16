@@ -37,9 +37,6 @@ UNIVERSE: List[Asset] = [
     Asset("USO", "Crude Oil ETF", "commodity"),
     Asset("DBC", "Broad Commodity ETF", "commodity"),
     Asset("VNQ", "US REIT ETF", "reit"),
-    Asset("BTC-USD", "Bitcoin", "crypto"),
-    Asset("ETH-USD", "Ethereum", "crypto"),
-    Asset("SOL-USD", "Solana", "crypto"),
 ]
 
 MACRO_SYMBOLS = {"VIX": "^VIX", "DXY": "DX-Y.NYB"}
