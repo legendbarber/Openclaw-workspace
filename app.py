@@ -1,6 +1,6 @@
 from flask import Flask, jsonify, send_from_directory, request
 from collections import defaultdict
-from datetime import datetime
+from datetime import datetime, UTC
 import html
 import re
 import urllib.request
@@ -284,7 +284,10 @@ def build_rankings(reports, q_filter='', min_reports=1):
             'title': x['title'],
             'broker': x['broker'],
             'date': x['date'],
-            'nid': x['nid']
+            'nid': x['nid'],
+            'reportUrl': f"https://finance.naver.com/research/company_read.naver?nid={x['nid']}",
+            'stockUrl': f"https://finance.naver.com/item/main.naver?code={code}",
+            'newsSearchUrl': f"https://search.naver.com/search.naver?where=news&query={name}%20{code}"
         } for x in rows[:4]]
 
         row = {
@@ -298,7 +301,13 @@ def build_rankings(reports, q_filter='', min_reports=1):
             'quantScore': quant_score,
             'score': round(final_score, 2),
             'recentReports': recent_titles,
-            'quant': quant
+            'quant': quant,
+            'links': {
+                'stock': f"https://finance.naver.com/item/main.naver?code={code}",
+                'research': "https://finance.naver.com/research/company_list.naver",
+                'news': f"https://search.naver.com/search.naver?where=news&query={name}%20{code}",
+                'discussion': f"https://finance.naver.com/item/board.naver?code={code}"
+            }
         }
 
         try:
@@ -326,7 +335,7 @@ def api_picks():
     themes = scrape_leading_themes(limit=8)
 
     return jsonify({
-        'generatedAt': datetime.utcnow().isoformat() + 'Z',
+        'generatedAt': datetime.now(UTC).isoformat().replace('+00:00', 'Z'),
         'source': 'Naver Finance 리서치 + Yahoo Finance 공개 데이터',
         'filters': {
             'top': top_n,

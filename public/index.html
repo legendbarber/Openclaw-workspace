@@ -23,6 +23,9 @@
     .small { font-size: 12px; color: #94a3b8; }
     ul { margin: 6px 0 0; padding-left: 16px; }
     li { margin-bottom: 4px; }
+    a { color: #93c5fd; text-decoration: none; }
+    a:hover { text-decoration: underline; }
+    .linkrow { display:flex; gap:10px; flex-wrap:wrap; margin-top:10px; }
     .good { color: #34d399; }
     .bad { color: #f87171; }
     @media (max-width: 880px) { .top { grid-template-columns: 1fr; } }
@@ -68,7 +71,7 @@
       if (!top) return '<b>필터 조건의 데이터가 없습니다.</b>';
 
       const reports = (top.recentReports || []).map(r =>
-        `<li>${r.title} <span class="small">(${r.broker})</span></li>`
+        `<li><a href="${r.reportUrl}" target="_blank" rel="noopener noreferrer">${r.title}</a> <span class="small">(${r.broker})</span></li>`
       ).join('');
 
       return `
@@ -87,6 +90,12 @@
             <div>상승여력: ${pct(top.quant?.metrics?.upsidePct)}</div>
             <div style="margin-top:8px">최근 리포트:</div>
             <ul>${reports}</ul>
+            <div class="linkrow">
+              <a href="${top.links?.stock || '#'}" target="_blank" rel="noopener noreferrer">종목 상세</a>
+              <a href="${top.links?.news || '#'}" target="_blank" rel="noopener noreferrer">관련 뉴스</a>
+              <a href="${top.links?.discussion || '#'}" target="_blank" rel="noopener noreferrer">종목 토론</a>
+              <a href="${top.links?.research || '#'}" target="_blank" rel="noopener noreferrer">리서치 목록</a>
+            </div>
           </div>
         </div>
       `;
@@ -132,13 +141,13 @@
     function renderTable(rows) {
       const body = rows.map((r, i) => {
         const links = (r.recentReports || []).slice(0, 2).map(x =>
-          `<li>${x.title} <span class="small">(${x.broker})</span></li>`
+          `<li><a href="${x.reportUrl}" target="_blank" rel="noopener noreferrer">${x.title}</a> <span class="small">(${x.broker})</span></li>`
         ).join('');
 
         return `
           <tr>
             <td>${i + 1}</td>
-            <td><b>${r.name}</b><br><span class="small">${r.code}</span></td>
+            <td><b><a href="${r.links?.stock || '#'}" target="_blank" rel="noopener noreferrer">${r.name}</a></b><br><span class="small">${r.code}</span></td>
             <td>${fmt(r.score)}</td>
             <td>${fmt(r.sentimentScore)}</td>
             <td>${fmt(r.quantScore)}</td>
