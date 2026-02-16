@@ -1,0 +1,46 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>2048 Game</title>
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+  <div class="app">
+    <div class="topbar">
+      <div>
+        <h1>2048</h1>
+        <p>방향키(←↑→↓) 또는 스와이프로 플레이</p>
+      </div>
+      <div class="scores">
+        <div class="score-box">
+          <span>점수</span>
+          <strong id="score">0</strong>
+        </div>
+        <div class="score-box">
+          <span>최고점수</span>
+          <strong id="best">0</strong>
+        </div>
+      </div>
+    </div>
+
+    <div class="actions">
+      <button id="newGameBtn">새 게임</button>
+    </div>
+
+    <div class="board-wrap">
+      <div id="board" class="board"></div>
+      <div id="overlay" class="overlay hidden">
+        <div class="overlay-card">
+          <h2 id="overlayTitle">게임 오버</h2>
+          <p id="overlayMsg">다시 도전해보자!</p>
+          <button id="retryBtn">다시 하기</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script src="script.js"></script>
+</body>
+</html>
