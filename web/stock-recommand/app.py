@@ -388,19 +388,29 @@ def index():
     <html><body style='font-family:Arial;padding:24px'>
       <h2>Investment Services</h2>
       <ul>
-        <li><a href='/stock'>/stock</a> - 국내/주도주 추천</li>
-        <li><a href='/global'>/global</a> - 전세계 멀티자산 추천 + 운용계획</li>
+        <li><a href='/stock-recommand'>/stock-recommand</a> - 국내/주도주 추천</li>
+        <li><a href='/invest-recommand'>/invest-recommand</a> - 전세계 멀티자산 추천 + 운용계획</li>
       </ul>
     </body></html>
     """
 
 
 @app.route('/stock')
-def stock_page():
+def stock_alias_page():
     return send_from_directory(app.static_folder, 'index.html')
 
 
 @app.route('/global')
+def global_alias_page():
+    return send_from_directory(app.static_folder, 'global.html')
+
+
+@app.route('/stock-recommand')
+def stock_page():
+    return send_from_directory(app.static_folder, 'index.html')
+
+
+@app.route('/invest-recommand')
 def global_page():
     return send_from_directory(app.static_folder, 'global.html')
 
