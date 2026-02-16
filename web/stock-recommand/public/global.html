@@ -27,6 +27,7 @@
     </label>
     <button onclick='loadData()'>새로 조회</button>
     <div id='macro' class='card'></div>
+    <div id='riskOnly' class='card' style='display:none'></div>
     <div id='picks' class='grid'></div>
     <div id='disc' class='card'></div>
   </div>
@@ -51,6 +52,17 @@ async function loadData(){
     <b>데이터 소스:</b> ${(d.dataSources || []).join(' / ')}
   `;
   document.getElementById('disc').innerHTML = d.disclaimer || '';
+
+  const riskOnlyEl = document.getElementById('riskOnly');
+  if ((d.mode || '').toLowerCase() === 'aggressive') {
+    const riskTop = (d.topRiskPicks || []).slice(0,5);
+    riskOnlyEl.style.display = 'block';
+    riskOnlyEl.innerHTML = `<b>공격형 전용 상위(주식/코인/리츠)</b><br>${riskTop.map((r,i)=>`${i+1}. ${r.symbol} (${r.category}) score=${r.score}`).join('<br>')}`;
+  } else {
+    riskOnlyEl.style.display = 'none';
+    riskOnlyEl.innerHTML = '';
+  }
+
   const picks = d.topPicks || [];
   document.getElementById('picks').innerHTML = picks.map((x,i)=>`
     <div class='card'>

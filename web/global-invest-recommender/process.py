@@ -26,6 +26,8 @@ UNIVERSE: List[Asset] = [
     Asset("EFA", "MSCI EAFE ETF", "equity"),
     Asset("EEM", "MSCI Emerging ETF", "equity"),
     Asset("ARKK", "ARK Innovation ETF", "equity"),
+    Asset("SOXL", "Semiconductor 3x ETF", "equity"),
+    Asset("TQQQ", "Nasdaq 100 3x ETF", "equity"),
     Asset("TLT", "20Y Treasury ETF", "bond"),
     Asset("IEF", "7-10Y Treasury ETF", "bond"),
     Asset("LQD", "Investment Grade Corp Bond ETF", "bond"),
@@ -37,6 +39,7 @@ UNIVERSE: List[Asset] = [
     Asset("VNQ", "US REIT ETF", "reit"),
     Asset("BTC-USD", "Bitcoin", "crypto"),
     Asset("ETH-USD", "Ethereum", "crypto"),
+    Asset("SOL-USD", "Solana", "crypto"),
 ]
 
 MACRO_SYMBOLS = {"VIX": "^VIX", "DXY": "DX-Y.NYB"}
@@ -286,12 +289,15 @@ def score_asset(asset: Asset, prices: pd.Series, risk_on: float, mode: str = "ba
 
     aggressive_return_boost = 0.0
     aggressive_risk_bonus = 0.0
+    aggressive_safety_penalty = 0.0
     if mode == "aggressive":
         aggressive_return_boost = expected_3m * 0.65
         if asset.category in {"equity", "crypto", "reit"}:
-            aggressive_risk_bonus += 6.0
+            aggressive_risk_bonus += 8.0
+        if asset.category in {"bond", "metal"}:
+            aggressive_safety_penalty += 14.0
 
-    total = momentum_score + trend_score + regime_bias - vol_penalty - dd_penalty + news_bonus + aggressive_return_boost + aggressive_risk_bonus
+    total = momentum_score + trend_score + regime_bias - vol_penalty - dd_penalty + news_bonus + aggressive_return_boost + aggressive_risk_bonus - aggressive_safety_penalty
 
     return {
         "symbol": asset.symbol,
@@ -344,6 +350,7 @@ def run_process(top_n: int = 7, mode: str = "balanced") -> Dict:
         rows.append(score_asset(asset, s, risk_on, mode=mode))
 
     rows.sort(key=lambda x: x["score"], reverse=True)
+    risk_rows = [x for x in rows if x["category"] in {"equity", "crypto", "reit"}]
 
     return {
         "generatedAt": datetime.now(UTC).isoformat().replace("+00:00", "Z"),
@@ -356,6 +363,7 @@ def run_process(top_n: int = 7, mode: str = "balanced") -> Dict:
         ],
         "macro": regime,
         "topPicks": rows[:top_n],
+        "topRiskPicks": risk_rows[:top_n],
         "allRankings": rows,
         "failed": failed,
         "disclaimer": "본 정보는 투자 권유가 아닙니다. 손익 책임은 투자자 본인에게 있으며, 실제 매매 전 추가 검증이 필요합니다.",
