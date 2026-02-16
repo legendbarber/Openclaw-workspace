@@ -72,6 +72,7 @@ async function loadData(){
       <div><b>왜 추천?</b></div>
       <ul>${(x.whyRecommended || []).map(r => `<li>${r}</li>`).join('')}</ul>
       <div><b>정보 소스</b>: ${x.source?.priceData || '-'} / 심볼: ${x.source?.symbol || '-'} / 기간: ${x.source?.lookback || '-'}</div>
+      <div><b>애널리스트 컨센서스</b>: 목표가 ${x.source?.consensusData?.targetMeanPrice ?? '-'} / 괴리율 ${x.source?.consensusData?.upsidePct ?? '-'}% / 추천지수 ${x.source?.consensusData?.recommendationMean ?? '-'} / 의견수 ${x.source?.consensusData?.analystOpinions ?? '-'}</div>
       <div><b>리포트/뉴스 시그널</b>: ${x.source?.newsData?.source || '-'} / 헤드라인 ${x.source?.newsData?.headlineCount ?? 0}개 / 점수 ${x.source?.newsData?.sentimentScore ?? 0}</div>
       <ul>${(x.source?.newsData?.headlines || []).slice(0,3).map(h => `<li>${h}</li>`).join('')}</ul>
       <div><b>기사 요약 인사이트</b></div>

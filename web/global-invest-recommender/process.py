@@ -141,6 +141,46 @@ def safe_download(symbol: str, period: str = "1y") -> pd.Series | None:
         return None
 
 
+def fetch_consensus_snapshot(symbol: str) -> Dict:
+    try:
+        info = yf.Ticker(symbol).info or {}
+        current = info.get("currentPrice")
+        target = info.get("targetMeanPrice")
+        rec_mean = info.get("recommendationMean")
+        rec_key = info.get("recommendationKey")
+        analysts = info.get("numberOfAnalystOpinions")
+
+        upside = None
+        if current and target:
+            upside = (target / current - 1) * 100
+
+        bonus = 0.0
+        if upside is not None:
+            bonus += float(np.clip(upside / 8, -5, 8))
+        if isinstance(rec_mean, (int, float)):
+            bonus += float(np.clip((3.0 - rec_mean) * 4, -6, 8))
+
+        return {
+            "currentPrice": current,
+            "targetMeanPrice": target,
+            "upsidePct": None if upside is None else round(float(upside), 2),
+            "recommendationMean": rec_mean,
+            "recommendationKey": rec_key,
+            "analystOpinions": analysts,
+            "consensusBonus": round(float(bonus), 2),
+        }
+    except Exception:
+        return {
+            "currentPrice": None,
+            "targetMeanPrice": None,
+            "upsidePct": None,
+            "recommendationMean": None,
+            "recommendationKey": None,
+            "analystOpinions": None,
+            "consensusBonus": 0.0,
+        }
+
+
 def pct_change(series: pd.Series, days: int) -> float:
     if len(series) <= days:
         return 0.0
@@ -234,7 +274,7 @@ def make_plan(asset: Asset, last: float, expected_3m: float, vol: float, mode: s
     }
 
 
-def build_why(asset: Asset, m1: float, m3: float, m6: float, trend: float, regime_bias: float, vol: float, dd: float, news_score: int) -> List[str]:
+def build_why(asset: Asset, m1: float, m3: float, m6: float, trend: float, regime_bias: float, vol: float, dd: float, news_score: int, consensus: Dict) -> List[str]:
     reasons = []
     if m3 > 0:
         reasons.append(f"최근 3개월 모멘텀이 플러스({m3*100:.2f}%)입니다.")
@@ -250,6 +290,10 @@ def build_why(asset: Asset, m1: float, m3: float, m6: float, trend: float, regim
         reasons.append(f"과거 1년 최대낙폭이 과도하지 않은 편입니다({-dd*100:.2f}%).")
     if news_score > 0:
         reasons.append("최근 뉴스/리포트 헤드라인 톤이 우호적입니다.")
+    if consensus.get("upsidePct") is not None:
+        reasons.append(f"애널리스트 평균 목표가 대비 괴리율은 {consensus.get('upsidePct')}% 입니다.")
+    if consensus.get("recommendationMean") is not None:
+        reasons.append(f"애널리스트 평균 추천지수는 {consensus.get('recommendationMean')} (낮을수록 우호)입니다.")
 
     if not reasons:
         reasons.append("상대점수 기반으로 상위권에 올라 추천 후보로 선정되었습니다.")
@@ -281,6 +325,8 @@ def score_asset(asset: Asset, prices: pd.Series, risk_on: float, mode: str = "ba
 
     news = fetch_news_digest(f"{asset.symbol} {asset.name}", limit=6)
     news_bonus = np.clip(news.get("sentimentScore", 0), -3, 3) * 1.5
+    consensus = fetch_consensus_snapshot(asset.symbol)
+    consensus_bonus = consensus.get("consensusBonus", 0.0)
 
     expected_3m = (m1 * 0.30 + m3 * 0.55 + m6 * 0.15) * 100
 
@@ -294,7 +340,7 @@ def score_asset(asset: Asset, prices: pd.Series, risk_on: float, mode: str = "ba
         if asset.category in {"bond", "metal"}:
             aggressive_safety_penalty += 14.0
 
-    total = momentum_score + trend_score + regime_bias - vol_penalty - dd_penalty + news_bonus + aggressive_return_boost + aggressive_risk_bonus - aggressive_safety_penalty
+    total = momentum_score + trend_score + regime_bias - vol_penalty - dd_penalty + news_bonus + consensus_bonus + aggressive_return_boost + aggressive_risk_bonus - aggressive_safety_penalty
 
     return {
         "symbol": asset.symbol,
@@ -303,7 +349,7 @@ def score_asset(asset: Asset, prices: pd.Series, risk_on: float, mode: str = "ba
         "score": round(float(total), 2),
         "expected3mPct": round(float(expected_3m), 2),
         "currentPrice": round(last, 2),
-        "whyRecommended": build_why(asset, m1, m3, m6, trend, regime_bias, vol, dd, int(news.get("sentimentScore", 0))),
+        "whyRecommended": build_why(asset, m1, m3, m6, trend, regime_bias, vol, dd, int(news.get("sentimentScore", 0)), consensus),
         "metrics": {
             "m1Pct": round(m1 * 100, 2),
             "m3Pct": round(m3 * 100, 2),
@@ -316,6 +362,7 @@ def score_asset(asset: Asset, prices: pd.Series, risk_on: float, mode: str = "ba
         "source": {
             "priceData": "Yahoo Finance (yfinance)",
             "newsData": news,
+            "consensusData": consensus,
             "symbol": asset.symbol,
             "lookback": "1y daily close",
             "macroInputs": [MACRO_SYMBOLS["VIX"], MACRO_SYMBOLS["DXY"]]
