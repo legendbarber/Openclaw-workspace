@@ -1,8 +1,11 @@
 const SIZE = 4;
+const ANIM_MS = 130;
+
 let grid = [];
 let score = 0;
 let best = Number(localStorage.getItem('best-2048') || 0);
 let hasWon = false;
+let animating = false;
 
 const boardEl = document.getElementById('board');
 const scoreEl = document.getElementById('score');
@@ -11,41 +14,41 @@ const overlayEl = document.getElementById('overlay');
 const overlayTitleEl = document.getElementById('overlayTitle');
 const overlayMsgEl = document.getElementById('overlayMsg');
 
+let bgLayer;
+let tileLayer;
+
+function setupBoardDOM() {
+  boardEl.innerHTML = '';
+
+  bgLayer = document.createElement('div');
+  bgLayer.className = 'bg-layer';
+
+  tileLayer = document.createElement('div');
+  tileLayer.className = 'tile-layer';
+
+  for (let i = 0; i < SIZE * SIZE; i++) {
+    const c = document.createElement('div');
+    c.className = 'bg-cell';
+    bgLayer.appendChild(c);
+  }
+
+  boardEl.appendChild(bgLayer);
+  boardEl.appendChild(tileLayer);
+}
+
 function initGame() {
   grid = Array.from({ length: SIZE }, () => Array(SIZE).fill(0));
   score = 0;
   hasWon = false;
+  animating = false;
   hideOverlay();
   addRandomTile();
   addRandomTile();
-  render();
+  renderTiles(grid);
+  renderScore();
 }
 
-function addRandomTile() {
-  const empties = [];
-  for (let r = 0; r < SIZE; r++) {
-    for (let c = 0; c < SIZE; c++) {
-      if (grid[r][c] === 0) empties.push([r, c]);
-    }
-  }
-  if (!empties.length) return;
-  const [r, c] = empties[Math.floor(Math.random() * empties.length)];
-  grid[r][c] = Math.random() < 0.9 ? 2 : 4;
-}
-
-function render(changedSet = null) {
-  boardEl.innerHTML = '';
-  for (let r = 0; r < SIZE; r++) {
-    for (let c = 0; c < SIZE; c++) {
-      const v = grid[r][c];
-      const cell = document.createElement('div');
-      const changed = changedSet && changedSet.has(`${r}-${c}`);
-      cell.className = `cell ${v > 2048 ? 'v-big' : `v-${v}`} ${changed ? 'changed' : ''}`;
-      cell.textContent = v === 0 ? '' : v;
-      boardEl.appendChild(cell);
-    }
-  }
-
+function renderScore() {
   scoreEl.textContent = score;
   if (score > best) {
     best = score;
@@ -54,105 +57,170 @@ function render(changedSet = null) {
   bestEl.textContent = best;
 }
 
-function slideAndMergeLine(line) {
-  const compressed = line.filter(v => v !== 0);
-  let gained = 0;
-
-  for (let i = 0; i < compressed.length - 1; i++) {
-    if (compressed[i] === compressed[i + 1]) {
-      compressed[i] *= 2;
-      gained += compressed[i];
-      compressed[i + 1] = 0;
-
-      if (compressed[i] === 2048 && !hasWon) {
-        hasWon = true;
-        showOverlay('2048 달성!', '계속해서 더 높은 점수에 도전해봐!', false);
-      }
-    }
-  }
-
-  const merged = compressed.filter(v => v !== 0);
-  while (merged.length < SIZE) merged.push(0);
-
-  return { line: merged, gained };
+function getGeom() {
+  const style = getComputedStyle(boardEl);
+  const pad = parseFloat(style.getPropertyValue('--pad')) || 10;
+  const gap = parseFloat(style.getPropertyValue('--gap')) || 10;
+  const w = boardEl.clientWidth;
+  const cell = (w - pad * 2 - gap * (SIZE - 1)) / SIZE;
+  return { pad, gap, cell };
 }
 
-function moveLeft() {
-  let moved = false;
-  let gainedTotal = 0;
-
-  for (let r = 0; r < SIZE; r++) {
-    const original = [...grid[r]];
-    const { line, gained } = slideAndMergeLine(original);
-    grid[r] = line;
-    gainedTotal += gained;
-    if (!arraysEqual(original, line)) moved = true;
-  }
-
-  score += gainedTotal;
-  return moved;
+function pos(r, c) {
+  const { pad, gap, cell } = getGeom();
+  return {
+    x: pad + c * (cell + gap),
+    y: pad + r * (cell + gap),
+    size: cell
+  };
 }
 
-function reverseRows() {
-  for (let r = 0; r < SIZE; r++) grid[r].reverse();
+function tileClass(v) {
+  if (v > 2048) return 'v-big';
+  return `v-${v}`;
 }
 
-function transpose() {
-  const newGrid = Array.from({ length: SIZE }, () => Array(SIZE).fill(0));
+function createTile(value, r, c, extraClass = '') {
+  const el = document.createElement('div');
+  const p = pos(r, c);
+  el.className = `tile ${tileClass(value)} ${extraClass}`.trim();
+  el.textContent = value;
+  el.style.width = `${p.size}px`;
+  el.style.height = `${p.size}px`;
+  el.style.left = `${p.x}px`;
+  el.style.top = `${p.y}px`;
+  return el;
+}
+
+function renderTiles(state, spawnSet = new Set()) {
+  tileLayer.innerHTML = '';
   for (let r = 0; r < SIZE; r++) {
     for (let c = 0; c < SIZE; c++) {
-      newGrid[c][r] = grid[r][c];
+      const v = state[r][c];
+      if (!v) continue;
+      const key = `${r}-${c}`;
+      const el = createTile(v, r, c, spawnSet.has(key) ? 'spawn' : '');
+      tileLayer.appendChild(el);
     }
   }
-  grid = newGrid;
 }
 
-function move(direction) {
-  let moved = false;
-  const prev = grid.map(row => [...row]);
+function addRandomTileToState(state) {
+  const empties = [];
+  for (let r = 0; r < SIZE; r++) {
+    for (let c = 0; c < SIZE; c++) {
+      if (state[r][c] === 0) empties.push([r, c]);
+    }
+  }
+  if (!empties.length) return null;
+  const [r, c] = empties[Math.floor(Math.random() * empties.length)];
+  state[r][c] = Math.random() < 0.9 ? 2 : 4;
+  return { r, c, value: state[r][c] };
+}
 
-  if (direction === 'left') moved = moveLeft();
+function addRandomTile() {
+  addRandomTileToState(grid);
+}
 
-  if (direction === 'right') {
-    reverseRows();
-    moved = moveLeft();
-    reverseRows();
+function cloneGrid(g) {
+  return g.map(row => [...row]);
+}
+
+function analyzeLine(values) {
+  const entries = [];
+  for (let i = 0; i < SIZE; i++) {
+    if (values[i] !== 0) entries.push({ value: values[i], from: i });
   }
 
-  if (direction === 'up') {
-    transpose();
-    moved = moveLeft();
-    transpose();
+  const out = Array(SIZE).fill(0);
+  const moves = [];
+  let gain = 0;
+  let t = 0;
+  let i = 0;
+
+  while (i < entries.length) {
+    if (i + 1 < entries.length && entries[i].value === entries[i + 1].value) {
+      const mergedVal = entries[i].value * 2;
+      out[t] = mergedVal;
+      gain += mergedVal;
+      moves.push({ from: entries[i].from, to: t, value: entries[i].value, merged: true });
+      moves.push({ from: entries[i + 1].from, to: t, value: entries[i + 1].value, merged: true });
+      i += 2;
+    } else {
+      out[t] = entries[i].value;
+      moves.push({ from: entries[i].from, to: t, value: entries[i].value, merged: false });
+      i += 1;
+    }
+    t += 1;
   }
 
-  if (direction === 'down') {
-    transpose();
-    reverseRows();
-    moved = moveLeft();
-    reverseRows();
-    transpose();
-  }
+  return { out, moves, gain };
+}
 
-  if (moved) {
-    addRandomTile();
+function computeMove(direction, state) {
+  const next = Array.from({ length: SIZE }, () => Array(SIZE).fill(0));
+  const moves = [];
+  let gain = 0;
 
-    const changedSet = new Set();
-    for (let r = 0; r < SIZE; r++) {
-      for (let c = 0; c < SIZE; c++) {
-        if (prev[r][c] !== grid[r][c]) changedSet.add(`${r}-${c}`);
+  for (let line = 0; line < SIZE; line++) {
+    let values;
+
+    if (direction === 'left' || direction === 'right') {
+      values = state[line].slice();
+      if (direction === 'right') values.reverse();
+    } else {
+      values = [];
+      for (let r = 0; r < SIZE; r++) values.push(state[r][line]);
+      if (direction === 'down') values.reverse();
+    }
+
+    const analyzed = analyzeLine(values);
+    gain += analyzed.gain;
+
+    for (let i = 0; i < SIZE; i++) {
+      let v = analyzed.out[i];
+      let idx = i;
+      if (direction === 'right' || direction === 'down') idx = SIZE - 1 - i;
+
+      if (direction === 'left' || direction === 'right') {
+        next[line][idx] = v;
+      } else {
+        next[idx][line] = v;
       }
     }
 
-    boardEl.classList.remove('anim-left', 'anim-right', 'anim-up', 'anim-down');
-    void boardEl.offsetWidth;
-    boardEl.classList.add(`anim-${direction}`);
+    for (const m of analyzed.moves) {
+      let fromIdx = m.from;
+      let toIdx = m.to;
+      if (direction === 'right' || direction === 'down') {
+        fromIdx = SIZE - 1 - fromIdx;
+        toIdx = SIZE - 1 - toIdx;
+      }
 
-    render(changedSet);
-
-    if (!canMove()) {
-      showOverlay('게임 오버', '더 이상 움직일 수 없어. 다시 도전!', true);
+      if (direction === 'left' || direction === 'right') {
+        moves.push({
+          fromR: line,
+          fromC: fromIdx,
+          toR: line,
+          toC: toIdx,
+          value: m.value,
+          merged: m.merged
+        });
+      } else {
+        moves.push({
+          fromR: fromIdx,
+          fromC: line,
+          toR: toIdx,
+          toC: line,
+          value: m.value,
+          merged: m.merged
+        });
+      }
     }
   }
+
+  const moved = JSON.stringify(state) !== JSON.stringify(next);
+  return { moved, next, gain, moves };
 }
 
 function canMove() {
@@ -166,10 +234,6 @@ function canMove() {
   return false;
 }
 
-function arraysEqual(a, b) {
-  return a.length === b.length && a.every((v, i) => v === b[i]);
-}
-
 function showOverlay(title, msg, showRetry = true) {
   overlayTitleEl.textContent = title;
   overlayMsgEl.textContent = msg;
@@ -179,6 +243,71 @@ function showOverlay(title, msg, showRetry = true) {
 
 function hideOverlay() {
   overlayEl.classList.add('hidden');
+}
+
+function animateMove(result) {
+  tileLayer.innerHTML = '';
+
+  const movingEls = [];
+
+  for (const m of result.moves) {
+    const el = createTile(m.value, m.fromR, m.fromC);
+    el.style.transition = `transform ${ANIM_MS}ms ease`;
+    tileLayer.appendChild(el);
+
+    const fromP = pos(m.fromR, m.fromC);
+    const toP = pos(m.toR, m.toC);
+    const dx = toP.x - fromP.x;
+    const dy = toP.y - fromP.y;
+
+    movingEls.push({ el, dx, dy });
+  }
+
+  requestAnimationFrame(() => {
+    for (const m of movingEls) {
+      m.el.style.transform = `translate(${m.dx}px, ${m.dy}px)`;
+    }
+  });
+}
+
+function move(direction) {
+  if (animating) return;
+
+  const result = computeMove(direction, grid);
+  if (!result.moved) return;
+
+  animating = true;
+  score += result.gain;
+  animateMove(result);
+
+  setTimeout(() => {
+    grid = cloneGrid(result.next);
+
+    const spawn = addRandomTileToState(grid);
+    const spawnSet = new Set();
+    if (spawn) spawnSet.add(`${spawn.r}-${spawn.c}`);
+
+    renderTiles(grid, spawnSet);
+    renderScore();
+
+    if (!hasWon) {
+      outer: for (let r = 0; r < SIZE; r++) {
+        for (let c = 0; c < SIZE; c++) {
+          if (grid[r][c] === 2048) {
+            hasWon = true;
+            showOverlay('2048 달성!', '계속해서 더 높은 점수에 도전해봐!', false);
+            break outer;
+          }
+        }
+      }
+    }
+
+    if (!canMove()) {
+      showOverlay('게임 오버', '더 이상 움직일 수 없어. 다시 도전!', true);
+    }
+
+    animating = false;
+  }, ANIM_MS + 10);
 }
 
 window.addEventListener('keydown', (e) => {
@@ -211,19 +340,17 @@ boardEl.addEventListener('touchend', (e) => {
 
   if (Math.max(absX, absY) < 24) return;
 
-  if (absX > absY) {
-    move(dx > 0 ? 'right' : 'left');
-  } else {
-    move(dy > 0 ? 'down' : 'up');
-  }
+  if (absX > absY) move(dx > 0 ? 'right' : 'left');
+  else move(dy > 0 ? 'down' : 'up');
 }, { passive: true });
+
+window.addEventListener('resize', () => {
+  renderTiles(grid);
+});
 
 document.getElementById('newGameBtn').addEventListener('click', initGame);
 document.getElementById('retryBtn').addEventListener('click', initGame);
 
-boardEl.addEventListener('animationend', () => {
-  boardEl.classList.remove('anim-left', 'anim-right', 'anim-up', 'anim-down');
-});
-
 bestEl.textContent = best;
+setupBoardDOM();
 initGame();
