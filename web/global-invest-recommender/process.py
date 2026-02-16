@@ -457,6 +457,60 @@ def score_asset(asset: Asset, prices: pd.Series, risk_on: float, mode: str = "ba
     }
 
 
+def build_model_portfolio(mode: str, picks: List[Dict]) -> Dict:
+    # 검증된 포트폴리오 프레임워크를 현재 점수와 결합
+    if mode == "balanced":
+        framework = "All Weather + 60/40 Hybrid"
+        reference = [
+            "Ray Dalio - All Weather concept",
+            "Classic 60/40 (equity/bond)",
+        ]
+        base_alloc = {
+            "equity": 35,
+            "bond": 35,
+            "metal": 15,
+            "commodity": 10,
+            "reit": 5,
+        }
+    else:
+        framework = "Momentum Rotation + Risk Guard"
+        reference = [
+            "Dual Momentum / Relative Momentum literature",
+            "Risk-parity style volatility guard",
+        ]
+        base_alloc = {
+            "equity": 50,
+            "bond": 15,
+            "metal": 10,
+            "commodity": 15,
+            "reit": 10,
+        }
+
+    # 점수 상위 자산에 카테고리별 비중 배분
+    by_cat = {}
+    for p in picks:
+        by_cat.setdefault(p["category"], []).append(p)
+
+    allocations = []
+    for cat, pct in base_alloc.items():
+        assets = sorted(by_cat.get(cat, []), key=lambda x: x["score"], reverse=True)
+        if not assets:
+            continue
+        # 상위 1~2개로 분배
+        if len(assets) == 1:
+            allocations.append({"symbol": assets[0]["symbol"], "category": cat, "weightPct": pct})
+        else:
+            allocations.append({"symbol": assets[0]["symbol"], "category": cat, "weightPct": round(pct * 0.65, 2)})
+            allocations.append({"symbol": assets[1]["symbol"], "category": cat, "weightPct": round(pct * 0.35, 2)})
+
+    return {
+        "framework": framework,
+        "references": reference,
+        "allocations": allocations,
+        "rebalance": "월 1회 점검, 분기 1회 리밸런싱 권장",
+    }
+
+
 def run_process(top_n: int = 7, mode: str = "balanced") -> Dict:
     mode = (mode or "balanced").lower()
     if mode not in {"balanced", "aggressive"}:
@@ -488,6 +542,9 @@ def run_process(top_n: int = 7, mode: str = "balanced") -> Dict:
     rows.sort(key=lambda x: x["score"], reverse=True)
     risk_rows = [x for x in rows if x["category"] in {"equity", "reit"}]
 
+    top = rows[:top_n]
+    portfolio = build_model_portfolio(mode, top)
+
     return {
         "generatedAt": datetime.now(UTC).isoformat().replace("+00:00", "Z"),
         "mode": mode,
@@ -498,8 +555,9 @@ def run_process(top_n: int = 7, mode: str = "balanced") -> Dict:
             f"Macro inputs: {MACRO_SYMBOLS['VIX']}, {MACRO_SYMBOLS['DXY']}"
         ],
         "macro": regime,
-        "topPicks": rows[:top_n],
+        "topPicks": top,
         "topRiskPicks": risk_rows[:top_n],
+        "modelPortfolio": portfolio,
         "allRankings": rows,
         "failed": failed,
         "disclaimer": "본 정보는 투자 권유가 아닙니다. 손익 책임은 투자자 본인에게 있으며, 실제 매매 전 추가 검증이 필요합니다.",
