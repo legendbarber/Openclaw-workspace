@@ -102,6 +102,55 @@ def fetch_stock_snapshot(code: str):
     return {'price': price, 'changeText': change}
 
 
+def scrape_leading_themes(limit=8):
+    url = 'https://finance.naver.com/sise/theme.naver'
+    s = fetch_text(url)
+    rows = re.findall(r'<tr[^>]*>(.*?)</tr>', s, re.S)
+
+    out = []
+    for r in rows:
+        if 'sise_group_detail.naver?type=theme' not in r:
+            continue
+
+        theme_m = re.search(r'/sise/sise_group_detail.naver\?type=theme&no=(\d+)"[^>]*>(.*?)</a>', r, re.S)
+        rate_m = re.search(r'class="number col_type2">\s*<span[^>]*>(.*?)</span>', r, re.S)
+        rise_m = re.search(r'class="number col_type4">\s*(\d+)\s*</td>', r, re.S)
+        stocks = re.findall(r'/item/main.naver\?code=(\d+)"[^>]*>(.*?)</a>', r, re.S)
+
+        if not theme_m:
+            continue
+
+        clean = lambda x: clean_html(x)
+        theme_name = clean(theme_m.group(2))
+        change_rate = clean(rate_m.group(1)) if rate_m else '-'
+
+        leaders = []
+        for code, name in stocks[:2]:
+            leaders.append({'code': code, 'name': clean(name)})
+
+        leader_snapshot = None
+        if leaders:
+            try:
+                leader_snapshot = fetch_stock_snapshot(leaders[0]['code'])
+            except Exception:
+                leader_snapshot = {'price': None, 'changeText': None}
+
+        out.append({
+            'themeNo': theme_m.group(1),
+            'theme': theme_name,
+            'changeRate': change_rate,
+            'risingCount': int(rise_m.group(1)) if rise_m else None,
+            'leaders': leaders,
+            'leaderSnapshot': leader_snapshot,
+            'detailUrl': f"https://finance.naver.com/sise/sise_group_detail.naver?type=theme&no={theme_m.group(1)}"
+        })
+
+        if len(out) >= limit:
+            break
+
+    return out
+
+
 def calc_rating_score(rec_key, rec_mean):
     base = RATING_SCORE.get(rec_key, 50)
     if rec_mean is not None and 1 <= rec_mean <= 5:
@@ -274,6 +323,7 @@ def api_picks():
 
     reports = scrape_reports(limit=120)
     rankings = build_rankings(reports, q_filter=q_filter, min_reports=min_reports)
+    themes = scrape_leading_themes(limit=8)
 
     return jsonify({
         'generatedAt': datetime.utcnow().isoformat() + 'Z',
@@ -290,6 +340,7 @@ def api_picks():
         },
         'topPick': rankings[0] if rankings else None,
         'rankings': rankings[:top_n],
+        'themes': themes,
         'rawReportCount': len(reports)
     })
 
