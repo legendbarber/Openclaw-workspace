@@ -101,6 +101,11 @@ button {
   justify-content: center;
   font-weight: 800;
   font-size: clamp(24px, 7vw, 36px);
+  transition: transform 120ms ease;
+}
+
+.cell.changed {
+  animation: pop 140ms ease;
 }
 
 .v-0 { color: transparent; }
@@ -137,4 +142,34 @@ button {
 .overlay-card h2 {
   margin: 0 0 6px;
   font-size: 30px;
+}
+
+.board.anim-left { animation: board-left 120ms ease; }
+.board.anim-right { animation: board-right 120ms ease; }
+.board.anim-up { animation: board-up 120ms ease; }
+.board.anim-down { animation: board-down 120ms ease; }
+
+@keyframes pop {
+  0% { transform: scale(0.88); }
+  100% { transform: scale(1); }
+}
+
+@keyframes board-left {
+  0% { transform: translateX(10px); }
+  100% { transform: translateX(0); }
+}
+
+@keyframes board-right {
+  0% { transform: translateX(-10px); }
+  100% { transform: translateX(0); }
+}
+
+@keyframes board-up {
+  0% { transform: translateY(10px); }
+  100% { transform: translateY(0); }
+}
+
+@keyframes board-down {
+  0% { transform: translateY(-10px); }
+  100% { transform: translateY(0); }
 }

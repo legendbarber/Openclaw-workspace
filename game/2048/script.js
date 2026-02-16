@@ -33,13 +33,14 @@ function addRandomTile() {
   grid[r][c] = Math.random() < 0.9 ? 2 : 4;
 }
 
-function render() {
+function render(changedSet = null) {
   boardEl.innerHTML = '';
   for (let r = 0; r < SIZE; r++) {
     for (let c = 0; c < SIZE; c++) {
       const v = grid[r][c];
       const cell = document.createElement('div');
-      cell.className = `cell ${v > 2048 ? 'v-big' : `v-${v}`}`;
+      const changed = changedSet && changedSet.has(`${r}-${c}`);
+      cell.className = `cell ${v > 2048 ? 'v-big' : `v-${v}`} ${changed ? 'changed' : ''}`;
       cell.textContent = v === 0 ? '' : v;
       boardEl.appendChild(cell);
     }
@@ -108,6 +109,7 @@ function transpose() {
 
 function move(direction) {
   let moved = false;
+  const prev = grid.map(row => [...row]);
 
   if (direction === 'left') moved = moveLeft();
 
@@ -133,7 +135,20 @@ function move(direction) {
 
   if (moved) {
     addRandomTile();
-    render();
+
+    const changedSet = new Set();
+    for (let r = 0; r < SIZE; r++) {
+      for (let c = 0; c < SIZE; c++) {
+        if (prev[r][c] !== grid[r][c]) changedSet.add(`${r}-${c}`);
+      }
+    }
+
+    boardEl.classList.remove('anim-left', 'anim-right', 'anim-up', 'anim-down');
+    void boardEl.offsetWidth;
+    boardEl.classList.add(`anim-${direction}`);
+
+    render(changedSet);
+
     if (!canMove()) {
       showOverlay('게임 오버', '더 이상 움직일 수 없어. 다시 도전!', true);
     }
@@ -205,6 +220,10 @@ boardEl.addEventListener('touchend', (e) => {
 
 document.getElementById('newGameBtn').addEventListener('click', initGame);
 document.getElementById('retryBtn').addEventListener('click', initGame);
+
+boardEl.addEventListener('animationend', () => {
+  boardEl.classList.remove('anim-left', 'anim-right', 'anim-up', 'anim-down');
+});
 
 bestEl.textContent = best;
 initGame();
