@@ -45,14 +45,41 @@ POSITIVE_NEWS = ["surge", "beat", "rally", "upgrade", "strong", "record", "gain"
 NEGATIVE_NEWS = ["drop", "miss", "downgrade", "weak", "lawsuit", "fall", "risk", "bear"]
 
 
+def fetch_article_preview(url: str) -> str:
+    try:
+        req = urllib.request.Request(url, headers={"User-Agent": "Mozilla/5.0"})
+        html = urllib.request.urlopen(req, timeout=6).read().decode("utf-8", "ignore")
+        m = re.search(r'<meta[^>]+name=["\']description["\'][^>]+content=["\']([^"\']+)["\']', html, re.I)
+        if not m:
+            m = re.search(r'<meta[^>]+property=["\']og:description["\'][^>]+content=["\']([^"\']+)["\']', html, re.I)
+        if m:
+            return re.sub(r'\s+', ' ', m.group(1)).strip()[:220]
+        return ""
+    except Exception:
+        return ""
+
+
 def fetch_news_digest(query: str, limit: int = 6) -> Dict:
     try:
         q = urllib.parse.quote(query)
         url = f"https://news.google.com/rss/search?q={q}&hl=en-US&gl=US&ceid=US:en"
         req = urllib.request.Request(url, headers={"User-Agent": "Mozilla/5.0"})
         xml = urllib.request.urlopen(req, timeout=12).read().decode("utf-8", "ignore")
-        titles = re.findall(r"<title><!\[CDATA\[(.*?)\]\]></title>", xml)
-        headlines = [t.strip() for t in titles[1: limit + 1]] if len(titles) > 1 else []
+
+        items = re.findall(r"<item>(.*?)</item>", xml, re.S)
+        parsed = []
+        for raw in items[:limit]:
+            t = re.search(r"<title><!\[CDATA\[(.*?)\]\]></title>", raw)
+            l = re.search(r"<link>(.*?)</link>", raw)
+            s = re.search(r"<source[^>]*>(.*?)</source>", raw)
+            if t and l:
+                parsed.append({
+                    "title": t.group(1).strip(),
+                    "link": l.group(1).strip(),
+                    "source": s.group(1).strip() if s else "",
+                })
+
+        headlines = [x["title"] for x in parsed]
 
         score = 0
         for h in headlines:
@@ -60,20 +87,32 @@ def fetch_news_digest(query: str, limit: int = 6) -> Dict:
             score += sum(1 for w in POSITIVE_NEWS if w in low)
             score -= sum(1 for w in NEGATIVE_NEWS if w in low)
 
+        insights = []
+        for it in parsed[:2]:
+            preview = fetch_article_preview(it["link"])
+            insights.append({
+                "title": it["title"],
+                "source": it["source"],
+                "url": it["link"],
+                "summary": preview if preview else "미리보기 요약을 가져오지 못했습니다. 링크 원문 확인 필요."
+            })
+
         return {
-            "source": "Google News RSS",
+            "source": "Google News RSS + article metadata",
             "query": query,
             "headlineCount": len(headlines),
             "sentimentScore": score,
             "headlines": headlines,
+            "insights": insights,
         }
     except Exception:
         return {
-            "source": "Google News RSS",
+            "source": "Google News RSS + article metadata",
             "query": query,
             "headlineCount": 0,
             "sentimentScore": 0,
             "headlines": [],
+            "insights": [],
         }
 
 
