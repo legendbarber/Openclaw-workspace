@@ -1,0 +1,134 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>유망 종목 레이더</title>
+  <style>
+    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; margin: 0; background: #0f172a; color: #e2e8f0; }
+    .wrap { max-width: 1100px; margin: 0 auto; padding: 24px; }
+    h1 { margin: 0 0 8px; }
+    .muted { color: #94a3b8; font-size: 14px; }
+    .card { background: #111827; border: 1px solid #1f2937; border-radius: 16px; padding: 16px; margin-top: 16px; }
+    .top { display: grid; grid-template-columns: 1.2fr 1fr; gap: 16px; }
+    .score { font-size: 42px; font-weight: 800; color: #22d3ee; }
+    .symbol { font-size: 24px; font-weight: 700; }
+    .btn { margin-top: 12px; background: #2563eb; border: 0; color: white; padding: 10px 14px; border-radius: 10px; cursor: pointer; }
+    .btn:hover { background: #1d4ed8; }
+    table { width: 100%; border-collapse: collapse; margin-top: 12px; }
+    th, td { text-align: left; border-bottom: 1px solid #1f2937; padding: 10px; font-size: 14px; vertical-align: top; }
+    th { color: #93c5fd; }
+    .small { font-size: 12px; color: #94a3b8; }
+    ul { margin: 6px 0 0; padding-left: 16px; }
+    li { margin-bottom: 4px; }
+    @media (max-width: 880px) { .top { grid-template-columns: 1fr; } }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <h1>📈 유망 종목 레이더</h1>
+    <div class="muted">네이버 금융 리서치 리포트를 실시간 수집해 현재 유망 종목을 자동 집계합니다.</div>
+    <button class="btn" onclick="loadData()">지금 새로 분석</button>
+
+    <div id="topPick" class="card">불러오는 중...</div>
+
+    <div class="card">
+      <h3 style="margin-top:0">랭킹 TOP 10</h3>
+      <div id="tableWrap"></div>
+    </div>
+
+    <div class="small" id="foot"></div>
+  </div>
+
+  <script>
+    const fmt = (v) => (v === null || v === undefined) ? '-' : Number(v).toLocaleString();
+
+    function renderTop(top) {
+      if (!top) return '<b>데이터를 가져오지 못했습니다.</b>';
+
+      const reports = (top.recentReports || []).map(r =>
+        `<li>${r.title} <span class="small">(${r.broker})</span></li>`
+      ).join('');
+
+      return `
+        <div class="top">
+          <div>
+            <div class="symbol">#1 ${top.name} (${top.code})</div>
+            <div class="score">${top.score}</div>
+            <div class="muted">Composite Score</div>
+          </div>
+          <div>
+            <div>리포트 언급수: <b>${top.reportCount}회</b></div>
+            <div>평균 감성점수: <b>${top.avgSentiment}</b></div>
+            <div>증권사 다양성: <b>${top.brokerDiversity}곳</b></div>
+            <div>현재가: <b>${fmt(top.snapshot?.price)}원</b></div>
+            <div style="margin-top:8px">최근 리포트:</div>
+            <ul>${reports}</ul>
+          </div>
+        </div>
+      `;
+    }
+
+    function renderTable(rows) {
+      const top10 = rows.slice(0, 10);
+      const body = top10.map((r, i) => {
+        const links = (r.recentReports || []).slice(0, 2).map(x =>
+          `<li>${x.title} <span class="small">(${x.broker})</span></li>`
+        ).join('');
+
+        return `
+          <tr>
+            <td>${i + 1}</td>
+            <td><b>${r.name}</b><br><span class="small">${r.code}</span></td>
+            <td>${r.score}</td>
+            <td>${r.reportCount}</td>
+            <td>${r.avgSentiment}</td>
+            <td>${fmt(r.snapshot?.price)}원</td>
+            <td><ul>${links}</ul></td>
+          </tr>
+        `;
+      }).join('');
+
+      return `
+        <table>
+          <thead>
+            <tr>
+              <th>#</th>
+              <th>종목</th>
+              <th>점수</th>
+              <th>언급수</th>
+              <th>감성</th>
+              <th>현재가</th>
+              <th>최근 코멘트</th>
+            </tr>
+          </thead>
+          <tbody>${body}</tbody>
+        </table>
+      `;
+    }
+
+    async function loadData() {
+      const topEl = document.getElementById('topPick');
+      const tableEl = document.getElementById('tableWrap');
+      const footEl = document.getElementById('foot');
+
+      topEl.innerHTML = '분석 중... (약 5~10초)';
+      tableEl.innerHTML = '';
+      footEl.textContent = '';
+
+      try {
+        const res = await fetch('/api/picks');
+        const data = await res.json();
+
+        topEl.innerHTML = renderTop(data.topPick);
+        tableEl.innerHTML = renderTable(data.rankings || []);
+        footEl.textContent = `${new Date(data.generatedAt).toLocaleString()} · ${data.source} · ${data.algorithm.disclaimer}`;
+      } catch (e) {
+        topEl.innerHTML = `<b>에러:</b> ${e.message}`;
+      }
+    }
+
+    loadData();
+  </script>
+</body>
+</html>
