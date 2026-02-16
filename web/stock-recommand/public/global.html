@@ -46,6 +46,8 @@ async function loadData(){
       <div><b>왜 추천?</b></div>
       <ul>${(x.whyRecommended || []).map(r => `<li>${r}</li>`).join('')}</ul>
       <div><b>정보 소스</b>: ${x.source?.priceData || '-'} / 심볼: ${x.source?.symbol || '-'} / 기간: ${x.source?.lookback || '-'}</div>
+      <div><b>리포트/뉴스 시그널</b>: ${x.source?.newsData?.source || '-'} / 헤드라인 ${x.source?.newsData?.headlineCount ?? 0}개 / 점수 ${x.source?.newsData?.sentimentScore ?? 0}</div>
+      <ul>${(x.source?.newsData?.headlines || []).slice(0,3).map(h => `<li>${h}</li>`).join('')}</ul>
       <hr>
       <div><b>운용 계획</b></div>
       <div>진입가 구간: ${x.plan?.entryZone?.[0]} ~ ${x.plan?.entryZone?.[1]}</div>
@@ -57,7 +59,13 @@ async function loadData(){
       <div>집행메모: ${x.plan?.executionNote}</div>
       <div>리밸런싱: ${x.plan?.rebalancingRule}</div>
       <div>비중: ${x.plan?.positionSizing}</div>
-      <div><a href='${x.links?.yahoo}' target='_blank'>Yahoo</a> · <a href='${x.links?.tradingview}' target='_blank'>TradingView</a></div>
+      <div>
+        <a href='${x.links?.yahoo}' target='_blank'>Yahoo</a> ·
+        <a href='${x.links?.tradingview}' target='_blank'>TradingView</a> ·
+        <a href='${x.links?.yahooAnalysis}' target='_blank'>Yahoo Analysis</a> ·
+        <a href='${x.links?.googleNews}' target='_blank'>Google News</a> ·
+        <a href='${x.links?.googleReports}' target='_blank'>Research Search</a>
+      </div>
     </div>
   `).join('');
 }

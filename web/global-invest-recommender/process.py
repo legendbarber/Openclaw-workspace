@@ -1,6 +1,9 @@
 from __future__ import annotations
 
 import json
+import re
+import urllib.parse
+import urllib.request
 from dataclasses import dataclass
 from datetime import datetime, UTC
 from typing import Dict, List
@@ -37,6 +40,55 @@ UNIVERSE: List[Asset] = [
 ]
 
 MACRO_SYMBOLS = {"VIX": "^VIX", "DXY": "DX-Y.NYB"}
+
+POSITIVE_NEWS = ["surge", "beat", "rally", "upgrade", "strong", "record", "gain", "bull"]
+NEGATIVE_NEWS = ["drop", "miss", "downgrade", "weak", "lawsuit", "fall", "risk", "bear"]
+
+
+def fetch_news_digest(query: str, limit: int = 6) -> Dict:
+    try:
+        q = urllib.parse.quote(query)
+        url = f"https://news.google.com/rss/search?q={q}&hl=en-US&gl=US&ceid=US:en"
+        req = urllib.request.Request(url, headers={"User-Agent": "Mozilla/5.0"})
+        xml = urllib.request.urlopen(req, timeout=12).read().decode("utf-8", "ignore")
+        titles = re.findall(r"<title><!\[CDATA\[(.*?)\]\]></title>", xml)
+        headlines = [t.strip() for t in titles[1: limit + 1]] if len(titles) > 1 else []
+
+        score = 0
+        for h in headlines:
+            low = h.lower()
+            score += sum(1 for w in POSITIVE_NEWS if w in low)
+            score -= sum(1 for w in NEGATIVE_NEWS if w in low)
+
+        return {
+            "source": "Google News RSS",
+            "query": query,
+            "headlineCount": len(headlines),
+            "sentimentScore": score,
+            "headlines": headlines,
+        }
+    except Exception:
+        return {
+            "source": "Google News RSS",
+            "query": query,
+            "headlineCount": 0,
+            "sentimentScore": 0,
+            "headlines": [],
+        }
+
+
+def research_links(asset: Asset) -> Dict:
+    base_q = urllib.parse.quote(f"{asset.name} {asset.symbol} outlook report")
+    links = {
+        "googleNews": f"https://news.google.com/search?q={urllib.parse.quote(asset.symbol)}",
+        "googleReports": f"https://www.google.com/search?q={base_q}",
+        "yahooAnalysis": f"https://finance.yahoo.com/quote/{asset.symbol}/analysis/",
+    }
+    if asset.category == "crypto":
+        links["coinDesk"] = f"https://www.coindesk.com/search?s={urllib.parse.quote(asset.symbol)}"
+    if asset.category in {"equity", "reit", "bond", "metal", "commodity"}:
+        links["seekingAlphaSearch"] = f"https://seekingalpha.com/search?query={urllib.parse.quote(asset.symbol)}"
+    return links
 
 
 def safe_download(symbol: str, period: str = "1y") -> pd.Series | None:
@@ -127,7 +179,7 @@ def make_plan(asset: Asset, last: float, expected_3m: float, vol: float) -> Dict
     }
 
 
-def build_why(asset: Asset, m1: float, m3: float, m6: float, trend: float, regime_bias: float, vol: float, dd: float) -> List[str]:
+def build_why(asset: Asset, m1: float, m3: float, m6: float, trend: float, regime_bias: float, vol: float, dd: float, news_score: int) -> List[str]:
     reasons = []
     if m3 > 0:
         reasons.append(f"최근 3개월 모멘텀이 플러스({m3*100:.2f}%)입니다.")
@@ -141,6 +193,8 @@ def build_why(asset: Asset, m1: float, m3: float, m6: float, trend: float, regim
         reasons.append(f"연환산 변동성이 상대적으로 관리 가능한 수준입니다({vol*100:.2f}%).")
     if dd < 0.25:
         reasons.append(f"과거 1년 최대낙폭이 과도하지 않은 편입니다({-dd*100:.2f}%).")
+    if news_score > 0:
+        reasons.append("최근 뉴스/리포트 헤드라인 톤이 우호적입니다.")
 
     if not reasons:
         reasons.append("상대점수 기반으로 상위권에 올라 추천 후보로 선정되었습니다.")
@@ -166,7 +220,10 @@ def score_asset(asset: Asset, prices: pd.Series, risk_on: float) -> Dict:
     dd_penalty = np.clip(dd - 0.18, 0, 1.0) * 15
     regime_bias = category_bias(asset.category, risk_on)
 
-    total = momentum_score + trend_score + regime_bias - vol_penalty - dd_penalty
+    news = fetch_news_digest(f"{asset.symbol} {asset.name}", limit=6)
+    news_bonus = np.clip(news.get("sentimentScore", 0), -3, 3) * 1.5
+
+    total = momentum_score + trend_score + regime_bias - vol_penalty - dd_penalty + news_bonus
     expected_3m = (m1 * 0.30 + m3 * 0.55 + m6 * 0.15) * 100
 
     return {
@@ -176,7 +233,7 @@ def score_asset(asset: Asset, prices: pd.Series, risk_on: float) -> Dict:
         "score": round(float(total), 2),
         "expected3mPct": round(float(expected_3m), 2),
         "currentPrice": round(last, 2),
-        "whyRecommended": build_why(asset, m1, m3, m6, trend, regime_bias, vol, dd),
+        "whyRecommended": build_why(asset, m1, m3, m6, trend, regime_bias, vol, dd, int(news.get("sentimentScore", 0))),
         "metrics": {
             "m1Pct": round(m1 * 100, 2),
             "m3Pct": round(m3 * 100, 2),
@@ -188,6 +245,7 @@ def score_asset(asset: Asset, prices: pd.Series, risk_on: float) -> Dict:
         },
         "source": {
             "priceData": "Yahoo Finance (yfinance)",
+            "newsData": news,
             "symbol": asset.symbol,
             "lookback": "1y daily close",
             "macroInputs": [MACRO_SYMBOLS["VIX"], MACRO_SYMBOLS["DXY"]]
@@ -196,6 +254,7 @@ def score_asset(asset: Asset, prices: pd.Series, risk_on: float) -> Dict:
         "links": {
             "yahoo": f"https://finance.yahoo.com/quote/{asset.symbol}",
             "tradingview": f"https://www.tradingview.com/symbols/{asset.symbol.replace('-', '')}/",
+            **research_links(asset),
         },
     }
 
