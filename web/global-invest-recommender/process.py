@@ -457,6 +457,48 @@ def score_asset(asset: Asset, prices: pd.Series, risk_on: float, mode: str = "ba
     }
 
 
+def backtest_portfolio(allocations: List[Dict], months: int = 12) -> Dict:
+    if not allocations:
+        return {"periodMonths": months, "returnPct": None, "volPct": None, "maxDrawdownPct": None}
+
+    series_map = {}
+    for a in allocations:
+        s = safe_download(a["symbol"], "1y")
+        if s is None:
+            continue
+        series_map[a["symbol"]] = s
+
+    if not series_map:
+        return {"periodMonths": months, "returnPct": None, "volPct": None, "maxDrawdownPct": None}
+
+    df = pd.DataFrame(series_map).dropna()
+    if len(df) < 40:
+        return {"periodMonths": months, "returnPct": None, "volPct": None, "maxDrawdownPct": None}
+
+    rets = df.pct_change().dropna()
+    w = {a["symbol"]: a["weightPct"] / 100 for a in allocations if a["symbol"] in rets.columns}
+    if not w:
+        return {"periodMonths": months, "returnPct": None, "volPct": None, "maxDrawdownPct": None}
+
+    wsum = sum(w.values())
+    w = {k: v / wsum for k, v in w.items()}
+
+    port = sum(rets[c] * w.get(c, 0) for c in rets.columns)
+    curve = (1 + port).cumprod()
+
+    total_ret = float(curve.iloc[-1] - 1)
+    vol = float(port.std() * np.sqrt(252))
+    peak = np.maximum.accumulate(curve.values)
+    dd = (curve.values / peak) - 1
+
+    return {
+        "periodMonths": months,
+        "returnPct": round(total_ret * 100, 2),
+        "volPct": round(vol * 100, 2),
+        "maxDrawdownPct": round(float(dd.min()) * 100, 2),
+    }
+
+
 def build_model_portfolio(mode: str, picks: List[Dict]) -> Dict:
     # 검증된 포트폴리오 프레임워크를 현재 점수와 결합
     if mode == "balanced":
@@ -503,11 +545,14 @@ def build_model_portfolio(mode: str, picks: List[Dict]) -> Dict:
             allocations.append({"symbol": assets[0]["symbol"], "category": cat, "weightPct": round(pct * 0.65, 2)})
             allocations.append({"symbol": assets[1]["symbol"], "category": cat, "weightPct": round(pct * 0.35, 2)})
 
+    bt = backtest_portfolio(allocations, months=12)
+
     return {
         "framework": framework,
         "references": reference,
         "allocations": allocations,
         "rebalance": "월 1회 점검, 분기 1회 리밸런싱 권장",
+        "backtest1y": bt,
     }
 
 

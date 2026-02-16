@@ -59,7 +59,8 @@ async function loadData(){
     <b>참고 포트폴리오 프레임워크</b>: ${pf.framework || '-'}<br>
     <b>참고 근거</b>: ${(pf.references || []).join(' / ')}<br>
     <b>추천 비중</b>: ${(pf.allocations || []).map(a => `${a.symbol} ${a.weightPct}%`).join(' · ')}<br>
-    <b>리밸런싱</b>: ${pf.rebalance || '-'}
+    <b>리밸런싱</b>: ${pf.rebalance || '-'}<br>
+    <b>1년 백테스트(단순 추정)</b>: 수익률 ${pf.backtest1y?.returnPct ?? '-'}% / 변동성 ${pf.backtest1y?.volPct ?? '-'}% / 최대낙폭 ${pf.backtest1y?.maxDrawdownPct ?? '-'}%
   `;
 
   const riskOnlyEl = document.getElementById('riskOnly');
