@@ -175,7 +175,14 @@ def macro_regime() -> Dict[str, float]:
     return {"risk_on": round(risk_on, 4), "vix": round(vix, 2), "dxy_1m_pct": round(dxy_mom * 100, 2)}
 
 
-def category_bias(category: str, risk_on: float) -> float:
+def category_bias(category: str, risk_on: float, mode: str = "balanced") -> float:
+    if mode == "aggressive":
+        if category in {"equity", "crypto", "reit"}:
+            return (risk_on - 0.45) * 18
+        if category in {"bond", "metal"}:
+            return (0.45 - risk_on) * 8
+        return 0.0
+
     if category in {"equity", "crypto", "reit"}:
         return (risk_on - 0.5) * 12
     if category in {"bond", "metal"}:
@@ -195,13 +202,22 @@ def buy_guide(category: str) -> Dict[str, str]:
     return {"where": "증권/거래 플랫폼 확인", "note": "유동성/수수료 확인"}
 
 
-def make_plan(asset: Asset, last: float, expected_3m: float, vol: float) -> Dict:
+def make_plan(asset: Asset, last: float, expected_3m: float, vol: float, mode: str = "balanced") -> Dict:
     entry_low = last * 0.985
     entry_high = last * 1.015
 
-    stop_pct = min(max(vol * 0.55, 0.05), 0.16)
-    tp1_pct = max(expected_3m * 0.55, 4.0)
-    tp2_pct = max(expected_3m, 7.0)
+    if mode == "aggressive":
+        stop_pct = min(max(vol * 0.7, 0.07), 0.22)
+        tp1_pct = max(expected_3m * 0.65, 6.0)
+        tp2_pct = max(expected_3m * 1.15, 10.0)
+        holding = "2~10주"
+        sizing = "단일 자산 최대 30%, 4개 이상 분산 권장"
+    else:
+        stop_pct = min(max(vol * 0.55, 0.05), 0.16)
+        tp1_pct = max(expected_3m * 0.55, 4.0)
+        tp2_pct = max(expected_3m, 7.0)
+        holding = "4~12주"
+        sizing = "단일 자산 최대 20%, 5개 분산 권장"
 
     guide = buy_guide(asset.category)
 
@@ -212,9 +228,9 @@ def make_plan(asset: Asset, last: float, expected_3m: float, vol: float) -> Dict
         "stopLoss": round(last * (1 - stop_pct), 2),
         "takeProfit1": round(last * (1 + tp1_pct / 100), 2),
         "takeProfit2": round(last * (1 + tp2_pct / 100), 2),
-        "holdingPeriod": "4~12주",
+        "holdingPeriod": holding,
         "rebalancingRule": "주 1회 점검, 점수 하락(상위 5위 이탈) 시 비중 축소",
-        "positionSizing": "단일 자산 최대 20%, 5개 분산 권장"
+        "positionSizing": sizing
     }
 
 
@@ -240,7 +256,7 @@ def build_why(asset: Asset, m1: float, m3: float, m6: float, trend: float, regim
     return reasons[:4]
 
 
-def score_asset(asset: Asset, prices: pd.Series, risk_on: float) -> Dict:
+def score_asset(asset: Asset, prices: pd.Series, risk_on: float, mode: str = "balanced") -> Dict:
     m1 = pct_change(prices, 21)
     m3 = pct_change(prices, 63)
     m6 = pct_change(prices, 126)
@@ -255,9 +271,13 @@ def score_asset(asset: Asset, prices: pd.Series, risk_on: float) -> Dict:
 
     momentum_score = (m1 * 0.35 + m3 * 0.4 + m6 * 0.25) * 220
     trend_score = trend * 8
-    vol_penalty = np.clip(vol - 0.22, 0, 1.0) * 18
-    dd_penalty = np.clip(dd - 0.18, 0, 1.0) * 15
-    regime_bias = category_bias(asset.category, risk_on)
+    if mode == "aggressive":
+        vol_penalty = np.clip(vol - 0.28, 0, 1.0) * 10
+        dd_penalty = np.clip(dd - 0.25, 0, 1.0) * 9
+    else:
+        vol_penalty = np.clip(vol - 0.22, 0, 1.0) * 18
+        dd_penalty = np.clip(dd - 0.18, 0, 1.0) * 15
+    regime_bias = category_bias(asset.category, risk_on, mode)
 
     news = fetch_news_digest(f"{asset.symbol} {asset.name}", limit=6)
     news_bonus = np.clip(news.get("sentimentScore", 0), -3, 3) * 1.5
@@ -289,7 +309,7 @@ def score_asset(asset: Asset, prices: pd.Series, risk_on: float) -> Dict:
             "lookback": "1y daily close",
             "macroInputs": [MACRO_SYMBOLS["VIX"], MACRO_SYMBOLS["DXY"]]
         },
-        "plan": make_plan(asset, last, float(expected_3m), vol),
+        "plan": make_plan(asset, last, float(expected_3m), vol, mode=mode),
         "links": {
             "yahoo": f"https://finance.yahoo.com/quote/{asset.symbol}",
             "tradingview": f"https://www.tradingview.com/symbols/{asset.symbol.replace('-', '')}/",
@@ -298,7 +318,11 @@ def score_asset(asset: Asset, prices: pd.Series, risk_on: float) -> Dict:
     }
 
 
-def run_process(top_n: int = 7) -> Dict:
+def run_process(top_n: int = 7, mode: str = "balanced") -> Dict:
+    mode = (mode or "balanced").lower()
+    if mode not in {"balanced", "aggressive"}:
+        mode = "balanced"
+
     regime = macro_regime()
     risk_on = regime["risk_on"]
 
@@ -309,13 +333,14 @@ def run_process(top_n: int = 7) -> Dict:
         if s is None:
             failed.append(asset.symbol)
             continue
-        rows.append(score_asset(asset, s, risk_on))
+        rows.append(score_asset(asset, s, risk_on, mode=mode))
 
     rows.sort(key=lambda x: x["score"], reverse=True)
 
     return {
         "generatedAt": datetime.now(UTC).isoformat().replace("+00:00", "Z"),
-        "model": "Global Multi-Asset Momentum-Regime v2",
+        "mode": mode,
+        "model": "Global Multi-Asset Momentum-Regime v3", 
         "methodology": "1M/3M/6M 모멘텀 + 20/50일 추세 + 변동성/낙폭 패널티 + VIX/DXY 기반 레짐 바이어스",
         "dataSources": [
             "Yahoo Finance price history via yfinance",

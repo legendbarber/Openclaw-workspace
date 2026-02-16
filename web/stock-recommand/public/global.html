@@ -19,6 +19,12 @@
     <h1>🌍 Global Invest Recommender</h1>
     <small>전세계 자산군 자동 스코어링 + 투자운용 계획</small><br><br>
     <div><a href='/stock-recommand'>/stock-recommand</a> · <a href='/invest-recommand'>/invest-recommand</a></div><br>
+    <label>전략 모드:
+      <select id='mode'>
+        <option value='balanced' selected>밸런스</option>
+        <option value='aggressive'>공격형</option>
+      </select>
+    </label>
     <button onclick='loadData()'>새로 조회</button>
     <div id='macro' class='card'></div>
     <div id='picks' class='grid'></div>
@@ -27,11 +33,13 @@
 
 <script>
 async function loadData(){
-  const res = await fetch('/api/global-report?top=7');
+  const mode = document.getElementById('mode').value;
+  const res = await fetch(`/api/global-report?top=7&mode=${encodeURIComponent(mode)}`);
   const d = await res.json();
   document.getElementById('macro').innerHTML = `
     <b>생성:</b> ${new Date(d.generatedAt).toLocaleString()}<br>
     <b>모델:</b> ${d.model || '-'}<br>
+    <b>전략모드:</b> ${d.mode || '-'}<br>
     <b>레짐:</b> risk_on=${d.macro?.risk_on}, VIX=${d.macro?.vix}, DXY 1M=${d.macro?.dxy_1m_pct}%<br>
     <b>방법론:</b> ${d.methodology || '-'}<br>
     <b>데이터 소스:</b> ${(d.dataSources || []).join(' / ')}

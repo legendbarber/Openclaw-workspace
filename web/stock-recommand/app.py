@@ -246,7 +246,7 @@ def fetch_quant_metrics(code: str):
     return None
 
 
-def load_global_report(top_n: int = 7):
+def load_global_report(top_n: int = 7, mode: str = 'balanced'):
     process_path = Path(__file__).resolve().parent.parent / 'global-invest-recommender' / 'process.py'
     if not process_path.exists():
         return {
@@ -261,7 +261,7 @@ def load_global_report(top_n: int = 7):
     assert spec and spec.loader
     sys.modules[spec.name] = module
     spec.loader.exec_module(module)
-    return module.run_process(top_n=top_n)
+    return module.run_process(top_n=top_n, mode=mode)
 
 
 def build_rankings(reports, q_filter='', min_reports=1):
@@ -378,8 +378,11 @@ def api_picks():
 @app.route('/api/global-report')
 def api_global_report():
     top_n = int(request.args.get('top', '7'))
+    mode = (request.args.get('mode', 'balanced') or 'balanced').lower()
+    if mode not in {'balanced', 'aggressive'}:
+        mode = 'balanced'
     top_n = clamp(top_n, 1, 20)
-    return jsonify(load_global_report(top_n=top_n))
+    return jsonify(load_global_report(top_n=top_n, mode=mode))
 
 
 @app.route('/')
