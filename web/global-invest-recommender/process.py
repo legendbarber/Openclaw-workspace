@@ -168,6 +168,9 @@ def fetch_consensus_snapshot(symbol: str) -> Dict:
             "recommendationKey": rec_key,
             "analystOpinions": analysts,
             "consensusBonus": round(float(bonus), 2),
+            "status": "ok" if (target is not None or rec_mean is not None) else "empty",
+            "usedSymbol": symbol,
+            "fallbackFrom": None,
         }
     except Exception:
         return {
@@ -178,7 +181,37 @@ def fetch_consensus_snapshot(symbol: str) -> Dict:
             "recommendationKey": None,
             "analystOpinions": None,
             "consensusBonus": 0.0,
+            "status": "error",
+            "usedSymbol": symbol,
+            "fallbackFrom": None,
         }
+
+
+def fetch_consensus_with_fallback(symbol: str) -> Dict:
+    # 레버리지/특수 ETF 등은 컨센서스가 비는 경우가 많아 기초자산으로 보완
+    fallback_map = {
+        "SOXL": "NVDA",
+        "TQQQ": "QQQ",
+        "USO": "CL=F",
+        "DBC": "DJP",
+        "GLD": "GC=F",
+        "SLV": "SI=F",
+        "VNQ": "XLRE",
+    }
+
+    base = fetch_consensus_snapshot(symbol)
+    if base.get("status") == "ok":
+        return base
+
+    fb = fallback_map.get(symbol)
+    if not fb:
+        return base
+
+    sub = fetch_consensus_snapshot(fb)
+    sub["fallbackFrom"] = symbol
+    if sub.get("status") == "ok":
+        sub["status"] = "fallback"
+    return sub
 
 
 def pct_change(series: pd.Series, days: int) -> float:
@@ -325,7 +358,7 @@ def score_asset(asset: Asset, prices: pd.Series, risk_on: float, mode: str = "ba
 
     news = fetch_news_digest(f"{asset.symbol} {asset.name}", limit=6)
     news_bonus = np.clip(news.get("sentimentScore", 0), -3, 3) * 1.5
-    consensus = fetch_consensus_snapshot(asset.symbol)
+    consensus = fetch_consensus_with_fallback(asset.symbol)
     consensus_bonus = consensus.get("consensusBonus", 0.0)
 
     expected_3m = (m1 * 0.30 + m3 * 0.55 + m6 * 0.15) * 100
