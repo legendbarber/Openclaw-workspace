@@ -474,14 +474,25 @@ def run_process(top_n: int = 7, mode: str = "balanced") -> Dict:
             continue
         rows.append(score_asset(asset, s, risk_on, mode=mode))
 
+    if mode == "balanced":
+        # 밸런스 모드: 저손실 우선 필터
+        leverage_symbols = {"SOXL", "TQQQ"}
+        rows = [
+            r for r in rows
+            if r["symbol"] not in leverage_symbols
+            and (r["metrics"].get("volAnnPct") or 0) <= 32
+            and (r["metrics"].get("maxDrawdownPct") or 999) <= 28
+            and (r.get("expected3mPct") or 0) > 0
+        ]
+
     rows.sort(key=lambda x: x["score"], reverse=True)
-    risk_rows = [x for x in rows if x["category"] in {"equity", "crypto", "reit"}]
+    risk_rows = [x for x in rows if x["category"] in {"equity", "reit"}]
 
     return {
         "generatedAt": datetime.now(UTC).isoformat().replace("+00:00", "Z"),
         "mode": mode,
         "model": "Global Multi-Asset Momentum-Regime v3", 
-        "methodology": "1M/3M/6M 모멘텀 + 20/50일 추세 + 변동성/낙폭 패널티 + VIX/DXY 기반 레짐 바이어스",
+        "methodology": "1M/3M/6M 모멘텀 + 20/50일 추세 + 변동성/낙폭 패널티 + VIX/DXY 기반 레짐 바이어스 (밸런스 모드는 저손실 필터 적용)",
         "dataSources": [
             "Yahoo Finance price history via yfinance",
             f"Macro inputs: {MACRO_SYMBOLS['VIX']}, {MACRO_SYMBOLS['DXY']}"
