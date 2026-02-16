@@ -4,6 +4,9 @@ from datetime import datetime, UTC
 import html
 import re
 import urllib.request
+import importlib.util
+import sys
+from pathlib import Path
 import yfinance as yf
 
 app = Flask(__name__, static_folder='public')
@@ -243,6 +246,24 @@ def fetch_quant_metrics(code: str):
     return None
 
 
+def load_global_report(top_n: int = 7):
+    process_path = Path(__file__).resolve().parent.parent / 'global-invest-recommender' / 'process.py'
+    if not process_path.exists():
+        return {
+            'error': 'global-invest-recommender/process.py not found',
+            'topPicks': [],
+            'allRankings': [],
+            'failed': []
+        }
+
+    spec = importlib.util.spec_from_file_location('global_process_module', str(process_path))
+    module = importlib.util.module_from_spec(spec)
+    assert spec and spec.loader
+    sys.modules[spec.name] = module
+    spec.loader.exec_module(module)
+    return module.run_process(top_n=top_n)
+
+
 def build_rankings(reports, q_filter='', min_reports=1):
     grouped = defaultdict(list)
     for r in reports:
@@ -354,9 +375,34 @@ def api_picks():
     })
 
 
+@app.route('/api/global-report')
+def api_global_report():
+    top_n = int(request.args.get('top', '7'))
+    top_n = clamp(top_n, 1, 20)
+    return jsonify(load_global_report(top_n=top_n))
+
+
 @app.route('/')
 def index():
+    return """
+    <html><body style='font-family:Arial;padding:24px'>
+      <h2>Investment Services</h2>
+      <ul>
+        <li><a href='/stock'>/stock</a> - 국내/주도주 추천</li>
+        <li><a href='/global'>/global</a> - 전세계 멀티자산 추천 + 운용계획</li>
+      </ul>
+    </body></html>
+    """
+
+
+@app.route('/stock')
+def stock_page():
     return send_from_directory(app.static_folder, 'index.html')
+
+
+@app.route('/global')
+def global_page():
+    return send_from_directory(app.static_folder, 'global.html')
 
 
 if __name__ == '__main__':
