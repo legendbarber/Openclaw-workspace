@@ -1,3 +1,11 @@
 
 web/invest-recommand/__pycache__/
 web/invest-recommand/state_log.json
+AGENTS.md
+BOOTSTRAP.md
+IDENTITY.md
+SOUL.md
+TOOLS.md
+USER.md
+reports.json
+tmp_report_scrape.py
