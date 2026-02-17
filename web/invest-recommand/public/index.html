@@ -1,0 +1,106 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Invest Recommand</title>
+  <style>
+    body{margin:0;background:#0b1220;color:#e5e7eb;font-family:Arial,sans-serif}
+    .wrap{max-width:1000px;margin:0 auto;padding:20px}
+    .card{background:#111827;border:1px solid #1f2937;border-radius:14px;padding:16px;margin-top:12px}
+    .big{font-size:28px;font-weight:700}
+    .muted{color:#9ca3af}
+    button{background:#2563eb;border:0;color:#fff;padding:9px 12px;border-radius:8px;cursor:pointer}
+    .row{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+    @media(max-width:900px){.row{grid-template-columns:1fr}}
+    a{color:#93c5fd}
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <h1>🎯 Single Invest Recommand</h1>
+    <div class="muted">단일 투자상품 1픽 추천 (합의+모멘텀+군중신호)</div>
+    <button onclick="loadData()">새로 조회</button>
+
+    <div id="meta" class="card"></div>
+    <div id="notrade" class="card" style="display:none"></div>
+    <div id="top" class="card"></div>
+    <div id="breakdown" class="row"></div>
+  </div>
+
+<script>
+function fmt(v,d=2){return (v===null||v===undefined)?'-':Number(v).toLocaleString(undefined,{maximumFractionDigits:d});}
+
+async function loadData(){
+  const res = await fetch('/api/report');
+  const d = await res.json();
+
+  document.getElementById('meta').innerHTML = `
+    <b>생성시각:</b> ${new Date(d.generatedAt).toLocaleString()}<br>
+    <b>모델:</b> ${d.model}<br>
+    <b>점수식:</b> ${d.methodology}
+  `;
+
+  const notrade = document.getElementById('notrade');
+  if(d.noTrade){
+    notrade.style.display='block';
+    notrade.innerHTML = `<b>오늘은 관망 권장</b><br>${d.noTradeReason || ''}`;
+  }else{
+    notrade.style.display='none';
+    notrade.innerHTML='';
+  }
+
+  const x = d.topPick;
+  if(!x){
+    document.getElementById('top').innerHTML = '추천 후보 없음';
+    document.getElementById('breakdown').innerHTML = '';
+    return;
+  }
+
+  document.getElementById('top').innerHTML = `
+    <div class='big'>Top Pick: ${x.symbol} (${x.name})</div>
+    <div>카테고리: ${x.category} / 종합점수: <b>${fmt(x.score)}</b></div>
+    <div>현재가: ${fmt(x.currentPrice)}</div>
+    <hr>
+    <div><b>운용 계획</b></div>
+    <div>진입가: ${fmt(x.plan.entryZone[0])} ~ ${fmt(x.plan.entryZone[1])}</div>
+    <div>손절가: ${fmt(x.plan.stopLoss)} / 1차 익절: ${fmt(x.plan.takeProfit1)} / 2차 익절: ${fmt(x.plan.takeProfit2)}</div>
+    <div>유효기간: ${x.plan.ttlTradingDays}거래일</div>
+    <div>무효화 조건: ${x.plan.invalidationRule}</div>
+    <div style='margin-top:8px'>
+      <a href='${x.links.yahoo}' target='_blank'>Yahoo</a> ·
+      <a href='${x.links.analysis}' target='_blank'>Analysis</a> ·
+      <a href='${x.links.news}' target='_blank'>News</a>
+    </div>
+  `;
+
+  const c = x.components;
+  document.getElementById('breakdown').innerHTML = `
+    <div class='card'>
+      <b>R) 리포트/기관 합의</b><br>
+      점수: ${fmt(c.reportConsensus.score)}<br>
+      목표가 괴리: ${fmt(c.reportConsensus.upsidePct)}%<br>
+      추천지수: ${fmt(c.reportConsensus.recommendationMean)} / 의견수: ${fmt(c.reportConsensus.analystOpinions,0)}
+    </div>
+    <div class='card'>
+      <b>M) 가격 모멘텀</b><br>
+      점수: ${fmt(c.momentum.score)}<br>
+      1M: ${fmt(c.momentum.m1Pct)}% / 3M: ${fmt(c.momentum.m3Pct)}% / 6M: ${fmt(c.momentum.m6Pct)}%
+    </div>
+    <div class='card'>
+      <b>C) 군중/뉴스 시그널</b><br>
+      점수: ${fmt(c.crowd.score)} / 톤: ${fmt(c.crowd.tone,0)} / 헤드라인: ${fmt(c.crowd.headlineCount,0)}개
+      <ul>${(c.crowd.headlines||[]).map(h=>`<li>${h}</li>`).join('')}</ul>
+    </div>
+    <div class='card'>
+      <b>L+V) 유동성/리스크</b><br>
+      유동성 점수: ${fmt(c.liquidityScore)}<br>
+      리스크 점수: ${fmt(c.risk.score)} / 변동성: ${fmt(c.risk.volPct)}% / 최대낙폭: ${fmt(c.risk.maxDrawdownPct)}%
+    </div>
+  `;
+}
+
+loadData();
+</script>
+</body>
+</html>
