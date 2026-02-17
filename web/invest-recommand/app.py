@@ -21,6 +21,7 @@ def home():
         <li><a style='color:#93c5fd' href='/game-demo-v2'>/game-demo-v2</a> (퍼즐 머지 데모 v2)</li>
         <li><a style='color:#93c5fd' href='/game-foldlight'>/game-foldlight</a> (독창 퍼즐 Foldlight 프로토)</li>
         <li><a style='color:#93c5fd' href='/game-tap-lights'>/game-tap-lights</a> (직관형 탭 퍼즐 신작)</li>
+        <li><a style='color:#93c5fd' href='/game-tap-burst'>/game-tap-burst</a> (초캐주얼 탭 버스트)</li>
       </ul>
     </body></html>
     """
@@ -95,6 +96,21 @@ def game_tap_lights_page():
 @app.get('/game-tap-lights/<path:filename>')
 def game_tap_lights_assets(filename):
     return send_from_directory(f"{app.static_folder}/game-tap-lights", filename)
+
+
+@app.get('/game-tap-burst')
+def game_tap_burst_redirect():
+    return redirect('/game-tap-burst/', code=302)
+
+
+@app.get('/game-tap-burst/')
+def game_tap_burst_page():
+    return send_from_directory(f"{app.static_folder}/game-tap-burst", 'index.html')
+
+
+@app.get('/game-tap-burst/<path:filename>')
+def game_tap_burst_assets(filename):
+    return send_from_directory(f"{app.static_folder}/game-tap-burst", filename)
 
 
 if __name__ == '__main__':

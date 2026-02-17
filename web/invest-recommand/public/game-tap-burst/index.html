@@ -1,0 +1,27 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width,initial-scale=1.0,user-scalable=no"/>
+  <title>Tap Burst Lite</title>
+  <link rel="stylesheet" href="style.css"/>
+</head>
+<body>
+  <div class="wrap">
+    <h1>🎈 Tap Burst Lite</h1>
+    <div class="sub">탭만 하면 됨. 같은 색 3개 이상 붙어있으면 터짐.</div>
+    <div class="hud">
+      <div>Score <b id="score">0</b></div>
+      <div>Combo <b id="combo">x1</b></div>
+      <div>Shuffle <b id="shuffle">1</b></div>
+      <button id="restart">재시작</button>
+    </div>
+    <div id="board" class="board"></div>
+    <div class="actions">
+      <button id="shuffleBtn">막히면 셔플</button>
+    </div>
+    <div id="msg" class="msg">가볍게 연쇄 노리기</div>
+  </div>
+  <script src="script.js"></script>
+</body>
+</html>
