@@ -1,0 +1,41 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width,initial-scale=1.0,user-scalable=no"/>
+  <title>Merge Circuit v2</title>
+  <link rel="stylesheet" href="style.css"/>
+</head>
+<body>
+  <div class="wrap">
+    <h1>🧩 Merge Circuit v2</h1>
+    <div class="hud">
+      <div>Score <b id="score">0</b></div>
+      <div>Best <b id="best">0</b></div>
+      <div>Combo <b id="combo">x1.0</b></div>
+    </div>
+
+    <div class="missions" id="missions"></div>
+
+    <div id="board" class="board"></div>
+
+    <div class="controls">
+      <button id="newBtn">새 게임</button>
+    </div>
+  </div>
+
+  <div id="overlay" class="overlay hidden">
+    <div class="panel">
+      <h2>게임 오버</h2>
+      <p id="result"></p>
+      <div class="row">
+        <button id="reviveBtn">광고 보고 부활(1회)</button>
+        <button id="retryBtn">다시 시작</button>
+      </div>
+      <small>데모: 실제 광고 대신 버튼만 구현됨</small>
+    </div>
+  </div>
+
+  <script src="script.js"></script>
+</body>
+</html>

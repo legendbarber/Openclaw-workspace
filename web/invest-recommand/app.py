@@ -17,7 +17,8 @@ def home():
       <p>이 주소를 앞으로 모든 웹서버의 메인 허브로 사용합니다.</p>
       <ul>
         <li><a style='color:#93c5fd' href='/invest-recommend'>/invest-recommend</a> (투자 추천)</li>
-        <li><a style='color:#93c5fd' href='/game-demo'>/game-demo</a> (스와이프 게임 데모)</li>
+        <li><a style='color:#93c5fd' href='/game-demo'>/game-demo</a> (스와이프 게임 데모 v1)</li>
+        <li><a style='color:#93c5fd' href='/game-demo-v2'>/game-demo-v2</a> (퍼즐 머지 데모 v2)</li>
       </ul>
     </body></html>
     """
@@ -47,6 +48,21 @@ def game_demo_page():
 @app.get('/game-demo/<path:filename>')
 def game_demo_assets(filename):
     return send_from_directory(f"{app.static_folder}/game-demo", filename)
+
+
+@app.get('/game-demo-v2')
+def game_demo_v2_redirect():
+    return redirect('/game-demo-v2/', code=302)
+
+
+@app.get('/game-demo-v2/')
+def game_demo_v2_page():
+    return send_from_directory(f"{app.static_folder}/game-demo-v2", 'index.html')
+
+
+@app.get('/game-demo-v2/<path:filename>')
+def game_demo_v2_assets(filename):
+    return send_from_directory(f"{app.static_folder}/game-demo-v2", filename)
 
 
 if __name__ == '__main__':
