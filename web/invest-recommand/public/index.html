@@ -18,13 +18,14 @@
 </head>
 <body>
   <div class="wrap">
-    <h1>🎯 Single Invest Recommand</h1>
-    <div class="muted">단일 투자상품 1픽 추천 (합의+모멘텀+군중신호)</div>
+    <h1>🎯 Invest Recommand</h1>
+    <div class="muted">상위 5개 투자상품 추천 (합의+모멘텀+군중신호)</div>
     <button onclick="loadData()">새로 조회</button>
 
     <div id="meta" class="card"></div>
     <div id="notrade" class="card" style="display:none"></div>
     <div id="top" class="card"></div>
+    <div id="top5" class="row"></div>
     <div id="breakdown" class="row"></div>
   </div>
 
@@ -53,6 +54,7 @@ async function loadData(){
   const x = d.topPick;
   if(!x){
     document.getElementById('top').innerHTML = '추천 후보 없음';
+    document.getElementById('top5').innerHTML = '';
     document.getElementById('breakdown').innerHTML = '';
     return;
   }
@@ -73,6 +75,16 @@ async function loadData(){
       <a href='${x.links.news}' target='_blank'>News</a>
     </div>
   `;
+
+  const top5 = (d.rankings || []).slice(0,5);
+  document.getElementById('top5').innerHTML = top5.map((r, idx) => `
+    <div class='card'>
+      <b>#${idx+1} ${r.symbol} (${r.name})</b><br>
+      점수: ${fmt(r.score)} / 현재가: ${fmt(r.currentPrice)}<br>
+      진입: ${fmt(r.plan.entryZone[0])}~${fmt(r.plan.entryZone[1])}<br>
+      손절: ${fmt(r.plan.stopLoss)} / 익절1: ${fmt(r.plan.takeProfit1)}
+    </div>
+  `).join('');
 
   const c = x.components;
   document.getElementById('breakdown').innerHTML = `
