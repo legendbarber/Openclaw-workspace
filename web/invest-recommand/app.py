@@ -1,4 +1,4 @@
-from flask import Flask, jsonify, send_from_directory
+from flask import Flask, jsonify, send_from_directory, redirect
 from engine import build_report
 
 app = Flask(__name__, static_folder="public")
@@ -35,6 +35,11 @@ def invest_recommand_alias():
 
 
 @app.get('/game-demo')
+def game_demo_redirect():
+    return redirect('/game-demo/', code=302)
+
+
+@app.get('/game-demo/')
 def game_demo_page():
     return send_from_directory(f"{app.static_folder}/game-demo", 'index.html')
 
