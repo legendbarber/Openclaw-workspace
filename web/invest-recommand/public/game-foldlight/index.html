@@ -1,0 +1,29 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width,initial-scale=1.0,user-scalable=no"/>
+  <title>Foldlight Proto</title>
+  <link rel="stylesheet" href="style.css"/>
+</head>
+<body>
+  <div class="wrap">
+    <h1>💡 Foldlight Prototype</h1>
+    <div class="hud">
+      <div>Stage <b id="stage">1</b></div>
+      <div>Energy <b id="energy">12</b></div>
+      <div>Lit Core <b id="lit">0/2</b></div>
+      <button id="reset">리셋</button>
+    </div>
+    <div class="help">조작: 타일 탭(회전) / 아래 버튼으로 Fold. 목표: 코어 2개 점등.</div>
+    <div id="board" class="board"></div>
+    <div class="actions">
+      <button id="foldH">가로 Fold</button>
+      <button id="foldV">세로 Fold</button>
+      <button id="pulse">빛 쏘기</button>
+    </div>
+    <div id="log" class="log"></div>
+  </div>
+  <script src="script.js"></script>
+</body>
+</html>

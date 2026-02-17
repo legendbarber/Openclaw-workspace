@@ -19,6 +19,7 @@ def home():
         <li><a style='color:#93c5fd' href='/invest-recommend'>/invest-recommend</a> (투자 추천)</li>
         <li><a style='color:#93c5fd' href='/game-demo'>/game-demo</a> (스와이프 게임 데모 v1)</li>
         <li><a style='color:#93c5fd' href='/game-demo-v2'>/game-demo-v2</a> (퍼즐 머지 데모 v2)</li>
+        <li><a style='color:#93c5fd' href='/game-foldlight'>/game-foldlight</a> (독창 퍼즐 Foldlight 프로토)</li>
       </ul>
     </body></html>
     """
@@ -63,6 +64,21 @@ def game_demo_v2_page():
 @app.get('/game-demo-v2/<path:filename>')
 def game_demo_v2_assets(filename):
     return send_from_directory(f"{app.static_folder}/game-demo-v2", filename)
+
+
+@app.get('/game-foldlight')
+def game_foldlight_redirect():
+    return redirect('/game-foldlight/', code=302)
+
+
+@app.get('/game-foldlight/')
+def game_foldlight_page():
+    return send_from_directory(f"{app.static_folder}/game-foldlight", 'index.html')
+
+
+@app.get('/game-foldlight/<path:filename>')
+def game_foldlight_assets(filename):
+    return send_from_directory(f"{app.static_folder}/game-foldlight", filename)
 
 
 if __name__ == '__main__':
