@@ -20,6 +20,7 @@ def home():
         <li><a style='color:#93c5fd' href='/game-demo'>/game-demo</a> (스와이프 게임 데모 v1)</li>
         <li><a style='color:#93c5fd' href='/game-demo-v2'>/game-demo-v2</a> (퍼즐 머지 데모 v2)</li>
         <li><a style='color:#93c5fd' href='/game-foldlight'>/game-foldlight</a> (독창 퍼즐 Foldlight 프로토)</li>
+        <li><a style='color:#93c5fd' href='/game-tap-lights'>/game-tap-lights</a> (직관형 탭 퍼즐 신작)</li>
       </ul>
     </body></html>
     """
@@ -79,6 +80,21 @@ def game_foldlight_page():
 @app.get('/game-foldlight/<path:filename>')
 def game_foldlight_assets(filename):
     return send_from_directory(f"{app.static_folder}/game-foldlight", filename)
+
+
+@app.get('/game-tap-lights')
+def game_tap_lights_redirect():
+    return redirect('/game-tap-lights/', code=302)
+
+
+@app.get('/game-tap-lights/')
+def game_tap_lights_page():
+    return send_from_directory(f"{app.static_folder}/game-tap-lights", 'index.html')
+
+
+@app.get('/game-tap-lights/<path:filename>')
+def game_tap_lights_assets(filename):
+    return send_from_directory(f"{app.static_folder}/game-tap-lights", filename)
 
 
 if __name__ == '__main__':

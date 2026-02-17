@@ -3,24 +3,22 @@
 <head>
   <meta charset="UTF-8"/>
   <meta name="viewport" content="width=device-width,initial-scale=1.0,user-scalable=no"/>
-  <title>Foldlight Proto</title>
+  <title>Foldlight Easy</title>
   <link rel="stylesheet" href="style.css"/>
 </head>
 <body>
   <div class="wrap">
-    <h1>💡 Foldlight Prototype</h1>
+    <h1>💡 Foldlight (Easy)</h1>
     <div class="hud">
-      <div>Stage <b id="stage">1</b></div>
-      <div>Energy <b id="energy">12</b></div>
-      <div>Lit Core <b id="lit">0/2</b></div>
+      <div>Energy <b id="energy">20</b></div>
+      <div>목표 <b id="lit">0/1</b></div>
       <button id="reset">리셋</button>
     </div>
-    <div class="help">조작: 타일 탭(회전) / 아래 버튼으로 Fold. 목표: 코어 2개 점등.</div>
+    <div class="help">아주 간단함: ① 접기 버튼 누르기 ② 자동으로 빛 발사 ③ 코어(◉)를 밝히면 클리어</div>
     <div id="board" class="board"></div>
     <div class="actions">
-      <button id="foldH">가로 Fold</button>
-      <button id="foldV">세로 Fold</button>
-      <button id="pulse">빛 쏘기</button>
+      <button id="foldH">가로 접기</button>
+      <button id="foldV">세로 접기</button>
     </div>
     <div id="log" class="log"></div>
   </div>

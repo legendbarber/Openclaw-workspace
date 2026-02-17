@@ -1,0 +1,28 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width,initial-scale=1.0,user-scalable=no"/>
+  <title>Tap Lights</title>
+  <link rel="stylesheet" href="style.css"/>
+</head>
+<body>
+  <div class="wrap">
+    <h1>🧠 Tap Lights</h1>
+    <div class="sub">조작은 탭만. 머리 써서 모든 불을 끄면 클리어.</div>
+    <div class="hud">
+      <div>Level <b id="level">1</b></div>
+      <div>Moves <b id="moves">0</b></div>
+      <div>Best <b id="best">-</b></div>
+      <button id="restart">재시작</button>
+    </div>
+    <div id="board" class="board"></div>
+    <div id="msg" class="msg">같은 칸을 다시 누르면 주변 상태가 또 바뀜</div>
+    <div class="actions">
+      <button id="prev">이전</button>
+      <button id="next">다음</button>
+    </div>
+  </div>
+  <script src="script.js"></script>
+</body>
+</html>
