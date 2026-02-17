@@ -344,35 +344,10 @@ def build_rankings(reports, q_filter='', min_reports=1):
 
 @app.route('/api/picks')
 def api_picks():
-    top_n = int(request.args.get('top', '10'))
-    min_reports = int(request.args.get('minReports', '1'))
-    q_filter = (request.args.get('q', '') or '').strip()
-
-    top_n = clamp(top_n, 1, 50)
-    min_reports = clamp(min_reports, 1, 10)
-
-    reports = scrape_reports(limit=120)
-    rankings = build_rankings(reports, q_filter=q_filter, min_reports=min_reports)
-    themes = scrape_leading_themes(limit=8)
-
     return jsonify({
-        'generatedAt': datetime.now(UTC).isoformat().replace('+00:00', 'Z'),
-        'source': 'Naver Finance 리서치 + Yahoo Finance 공개 데이터',
-        'filters': {
-            'top': top_n,
-            'minReports': min_reports,
-            'q': q_filter
-        },
-        'algorithm': {
-            'name': 'Hybrid Research+Quant Composite v2',
-            'note': '리포트 기반 감성점수(45%) + 정량지표 점수(55%) 결합 랭킹',
-            'disclaimer': '참고용 자동 집계입니다. 투자 판단과 손익 책임은 본인에게 있습니다.'
-        },
-        'topPick': rankings[0] if rankings else None,
-        'rankings': rankings[:top_n],
-        'themes': themes,
-        'rawReportCount': len(reports)
-    })
+        'disabled': True,
+        'message': 'stock-recommand 기능은 사용자 요청으로 제거되었습니다.',
+    }), 410
 
 
 @app.route('/api/global-report')
@@ -391,7 +366,6 @@ def index():
     <html><body style='font-family:Arial;padding:24px'>
       <h2>Investment Services</h2>
       <ul>
-        <li><a href='/stock-recommand'>/stock-recommand</a> - 국내/주도주 추천</li>
         <li><a href='/invest-recommand'>/invest-recommand</a> - 전세계 멀티자산 추천 + 운용계획</li>
       </ul>
     </body></html>
@@ -400,7 +374,7 @@ def index():
 
 @app.route('/stock')
 def stock_alias_page():
-    return send_from_directory(app.static_folder, 'index.html')
+    return "stock-recommand 기능은 제거되었습니다.", 410
 
 
 @app.route('/global')
@@ -410,7 +384,7 @@ def global_alias_page():
 
 @app.route('/stock-recommand')
 def stock_page():
-    return send_from_directory(app.static_folder, 'index.html')
+    return "stock-recommand 기능은 사용자 요청으로 삭제되었습니다.", 410
 
 
 @app.route('/invest-recommand')
