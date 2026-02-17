@@ -16,7 +16,8 @@ def home():
       <h2>legendbarber Web Hub</h2>
       <p>이 주소를 앞으로 모든 웹서버의 메인 허브로 사용합니다.</p>
       <ul>
-        <li><a style='color:#93c5fd' href='/invest-recommend'>/invest-recommend</a> (현재 서비스)</li>
+        <li><a style='color:#93c5fd' href='/invest-recommend'>/invest-recommend</a> (투자 추천)</li>
+        <li><a style='color:#93c5fd' href='/game-demo'>/game-demo</a> (스와이프 게임 데모)</li>
       </ul>
     </body></html>
     """
@@ -31,6 +32,16 @@ def invest_recommend_page():
 @app.get('/invest-recommand')
 def invest_recommand_alias():
     return send_from_directory(app.static_folder, 'index.html')
+
+
+@app.get('/game-demo')
+def game_demo_page():
+    return send_from_directory(f"{app.static_folder}/game-demo", 'index.html')
+
+
+@app.get('/game-demo/<path:filename>')
+def game_demo_assets(filename):
+    return send_from_directory(f"{app.static_folder}/game-demo", filename)
 
 
 if __name__ == '__main__':

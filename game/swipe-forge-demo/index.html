@@ -1,0 +1,29 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no" />
+  <title>Swipe Forge Demo</title>
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+  <div class="hud">
+    <div><b>Score</b> <span id="score">0</span></div>
+    <div><b>HP</b> <span id="hp">3</span></div>
+    <div><b>Level</b> <span id="level">1</span></div>
+    <button id="restartBtn">Restart</button>
+  </div>
+
+  <div id="game" class="game"></div>
+
+  <div id="overlay" class="overlay hidden">
+    <div class="panel">
+      <h2 id="title">Game Over</h2>
+      <p id="summary"></p>
+      <button id="retryBtn">다시 시작</button>
+    </div>
+  </div>
+
+  <script src="script.js"></script>
+</body>
+</html>

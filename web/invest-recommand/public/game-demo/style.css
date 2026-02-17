@@ -1,0 +1,15 @@
+*{box-sizing:border-box} body{margin:0;background:#0b0f1d;color:#e8ecff;font-family:Arial,sans-serif;touch-action:none}
+.hud{display:flex;gap:14px;align-items:center;justify-content:center;padding:10px;background:#101733;position:sticky;top:0;z-index:5}
+.hud button{background:#2f59ff;color:white;border:0;padding:8px 12px;border-radius:8px}
+.game{position:relative;width:min(92vw,420px);height:78vh;margin:10px auto;border:2px solid #25305e;border-radius:14px;overflow:hidden;background:linear-gradient(#0f1530,#090d1f)}
+.lane{position:absolute;top:0;bottom:0;width:2px;background:#27325f44}
+.player{position:absolute;width:52px;height:52px;border-radius:14px;background:#67f0c5;left:50%;transform:translateX(-50%);bottom:18px;box-shadow:0 0 16px #67f0c577;transition:left 120ms ease}
+.enemy,.coin{position:absolute;width:40px;height:40px;border-radius:10px;top:-45px}
+.enemy{background:#ff5a7a;box-shadow:0 0 10px #ff5a7a88}
+.coin{background:#ffd24d;box-shadow:0 0 10px #ffd24d99}
+.flash{animation:flash .2s ease}
+@keyframes flash{0%{background:#ff9db0}100%{background:#67f0c5}}
+.overlay{position:fixed;inset:0;background:#0008;display:flex;align-items:center;justify-content:center}
+.overlay.hidden{display:none}
+.panel{background:#141b37;padding:20px;border:1px solid #33407a;border-radius:14px;text-align:center;min-width:260px}
+.panel button{background:#2f59ff;color:#fff;border:0;padding:10px 14px;border-radius:8px}
