@@ -1,0 +1,35 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width,initial-scale=1.0,user-scalable=no"/>
+  <title>One-Line Shift</title>
+  <link rel="stylesheet" href="style.css"/>
+</head>
+<body>
+  <div class="wrap">
+    <h1>🧩 One-Line Shift</h1>
+    <div class="sub">한 줄만 밀어서 목표 패턴 만들기</div>
+    <div class="hud">
+      <div>Stage <b id="stage">1</b></div>
+      <div>Turns <b id="turns">12</b></div>
+      <div>Goal <b id="goal">★ 4개 연결</b></div>
+      <button id="reset">리셋</button>
+    </div>
+    <div class="mode">
+      <button id="rowMode" class="on">가로줄 모드</button>
+      <button id="colMode">세로줄 모드</button>
+      <span>선택줄: <b id="selected">0</b></span>
+    </div>
+    <div id="board" class="board"></div>
+    <div class="controls">
+      <button id="left">←</button>
+      <button id="right">→</button>
+      <button id="up">↑</button>
+      <button id="down">↓</button>
+    </div>
+    <div id="msg" class="msg">줄을 탭해 선택하고 화살표로 한 칸 이동</div>
+  </div>
+  <script src="script.js"></script>
+</body>
+</html>

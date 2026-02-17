@@ -22,6 +22,7 @@ def home():
         <li><a style='color:#93c5fd' href='/game-foldlight'>/game-foldlight</a> (독창 퍼즐 Foldlight 프로토)</li>
         <li><a style='color:#93c5fd' href='/game-tap-lights'>/game-tap-lights</a> (직관형 탭 퍼즐 신작)</li>
         <li><a style='color:#93c5fd' href='/game-tap-burst'>/game-tap-burst</a> (초캐주얼 탭 버스트)</li>
+        <li><a style='color:#93c5fd' href='/game-one-line-shift'>/game-one-line-shift</a> (독창 퍼즐: 한 줄만 바꾸기)</li>
       </ul>
     </body></html>
     """
@@ -111,6 +112,21 @@ def game_tap_burst_page():
 @app.get('/game-tap-burst/<path:filename>')
 def game_tap_burst_assets(filename):
     return send_from_directory(f"{app.static_folder}/game-tap-burst", filename)
+
+
+@app.get('/game-one-line-shift')
+def game_one_line_shift_redirect():
+    return redirect('/game-one-line-shift/', code=302)
+
+
+@app.get('/game-one-line-shift/')
+def game_one_line_shift_page():
+    return send_from_directory(f"{app.static_folder}/game-one-line-shift", 'index.html')
+
+
+@app.get('/game-one-line-shift/<path:filename>')
+def game_one_line_shift_assets(filename):
+    return send_from_directory(f"{app.static_folder}/game-one-line-shift", filename)
 
 
 if __name__ == '__main__':
