@@ -14,6 +14,14 @@
     .row{display:grid;grid-template-columns:1fr 1fr;gap:10px}
     @media(max-width:900px){.row{grid-template-columns:1fr}}
     a{color:#93c5fd}
+    .cal-head{display:flex;justify-content:space-between;align-items:center;gap:8px;margin-bottom:10px}
+    .cal-grid{display:grid;grid-template-columns:repeat(7,1fr);gap:6px}
+    .cal-dow{font-size:12px;color:#9ca3af;text-align:center}
+    .cal-day{border:1px solid #1f2937;border-radius:8px;min-height:54px;padding:6px;font-size:12px;position:relative;background:#0f172a;cursor:pointer}
+    .cal-day.empty{opacity:.35;cursor:default}
+    .cal-day.active{outline:2px solid #2563eb}
+    .dot{width:7px;height:7px;border-radius:50%;background:#22c55e;position:absolute;right:6px;bottom:6px}
+    .tiny{font-size:12px;color:#9ca3af}
   </style>
 </head>
 <body>
@@ -23,6 +31,17 @@
     <button onclick="loadData()">새로 조회</button>
 
     <div id="meta" class="card"></div>
+    <div id="calendarCard" class="card">
+      <div class="cal-head">
+        <button onclick="moveMonth(-1)">◀ 이전달</button>
+        <b id="calTitle">-</b>
+        <button onclick="moveMonth(1)">다음달 ▶</button>
+      </div>
+      <div class="cal-grid" id="calDow"></div>
+      <div class="cal-grid" id="calGrid"></div>
+      <div class="tiny" style="margin-top:8px">● 점이 찍힌 날짜 = 추천 스냅샷 저장됨</div>
+    </div>
+    <div id="snapshotDetail" class="card">날짜를 선택하면 해당 일자의 추천 기록을 보여줍니다.</div>
     <div id="notrade" class="card" style="display:none"></div>
     <div id="top" class="card"></div>
     <div id="riskAdjustedTop5" class="row"></div>
@@ -79,6 +98,70 @@ function recommendationWhy(r, mode='risk'){
   reasons.push(`종합점수 ${fmt(r.score)} = 0.35R + 0.25M + 0.20C + 0.10L + 0.10V`);
 
   return reasons.join('<br>');
+}
+
+let snapshotDates = new Set();
+let calCursor = new Date();
+let selectedDate = null;
+
+async function loadSnapshots(){
+  try{
+    const res = await fetch('/api/snapshots');
+    const data = await res.json();
+    snapshotDates = new Set((data.items||[]).map(x=>x.dateKST));
+    renderCalendar();
+  }catch(_){ }
+}
+
+function renderCalendar(){
+  const y = calCursor.getFullYear();
+  const m = calCursor.getMonth();
+  document.getElementById('calTitle').textContent = `${y}년 ${m+1}월`;
+  const dows = ['일','월','화','수','목','금','토'];
+  document.getElementById('calDow').innerHTML = dows.map(d=>`<div class='cal-dow'>${d}</div>`).join('');
+
+  const first = new Date(y,m,1);
+  const start = first.getDay();
+  const lastDate = new Date(y,m+1,0).getDate();
+  const cells = [];
+  for(let i=0;i<start;i++) cells.push(`<div class='cal-day empty'></div>`);
+  for(let d=1; d<=lastDate; d++){
+    const ds = `${y}-${String(m+1).padStart(2,'0')}-${String(d).padStart(2,'0')}`;
+    const has = snapshotDates.has(ds);
+    const active = selectedDate===ds ? 'active' : '';
+    cells.push(`<div class='cal-day ${active}' onclick="pickDate('${ds}')">${d}${has?"<span class='dot'></span>":''}</div>`);
+  }
+  document.getElementById('calGrid').innerHTML = cells.join('');
+}
+
+function moveMonth(delta){
+  calCursor = new Date(calCursor.getFullYear(), calCursor.getMonth()+delta, 1);
+  renderCalendar();
+}
+
+async function pickDate(ds){
+  selectedDate = ds;
+  renderCalendar();
+  const detail = document.getElementById('snapshotDetail');
+  if(!snapshotDates.has(ds)){
+    detail.innerHTML = `<b>${ds}</b><br>이 날짜에는 저장된 기록이 없습니다.`;
+    return;
+  }
+  detail.innerHTML = `<b>${ds}</b><br>불러오는 중...`;
+  try{
+    const res = await fetch(`/api/snapshots/${ds}`);
+    if(!res.ok){ detail.innerHTML = `<b>${ds}</b><br>기록을 불러오지 못했습니다.`; return; }
+    const s = await res.json();
+    const risk = (s.riskAdjustedTop5||[]).slice(0,3).map(x=>`${x.symbol}(${fmtPct(x.expectedReturnPct)} / RR ${fmt(x.riskReward)})`).join(', ');
+    const ret = (s.highReturnTop5||[]).slice(0,3).map(x=>`${x.symbol}(${fmtPct(x.expectedReturnPct)})`).join(', ');
+    detail.innerHTML = `
+      <b>${ds} 저장 기록</b><br>
+      생성시각: ${new Date(s.generatedAt).toLocaleString()}<br>
+      Top Pick: ${(s.topPick||{}).symbol || '-'} (${(s.topPick||{}).name || '-'})<br>
+      위험대비 상위: ${risk || '-'}<br>
+      절대수익 상위: ${ret || '-'}
+    `;
+  }catch(_){ detail.innerHTML = `<b>${ds}</b><br>기록을 불러오지 못했습니다.`; }
 }
 
 async function loadData(){
@@ -201,6 +284,7 @@ async function loadData(){
   `;
 }
 
+loadSnapshots();
 loadData();
 </script>
 </body>

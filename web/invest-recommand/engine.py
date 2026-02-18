@@ -415,3 +415,16 @@ def list_snapshots(limit: int = 60) -> List[Dict]:
         except Exception:
             out.append({"dateKST": p.stem, "generatedAt": None, "topSymbol": None, "path": str(p)})
     return out
+
+
+def get_snapshot(date_kst: str) -> Dict | None:
+    SNAPSHOT_DIR.mkdir(parents=True, exist_ok=True)
+    if not re.match(r"^\d{4}-\d{2}-\d{2}$", date_kst or ""):
+        return None
+    p = SNAPSHOT_DIR / f"{date_kst}.json"
+    if not p.exists():
+        return None
+    try:
+        return json.loads(p.read_text(encoding="utf-8"))
+    except Exception:
+        return None

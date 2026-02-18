@@ -1,5 +1,5 @@
 from flask import Flask, jsonify, send_from_directory, redirect
-from engine import build_report, save_daily_snapshot, list_snapshots
+from engine import build_report, save_daily_snapshot, list_snapshots, get_snapshot
 import threading
 import time
 from datetime import datetime
@@ -45,6 +45,14 @@ def api_snapshot_force():
 @app.get('/api/snapshots')
 def api_snapshots():
     return jsonify({"items": list_snapshots(limit=365)})
+
+
+@app.get('/api/snapshots/<date_kst>')
+def api_snapshot_by_date(date_kst: str):
+    data = get_snapshot(date_kst)
+    if not data:
+        return jsonify({"error": "not_found", "dateKST": date_kst}), 404
+    return jsonify(data)
 
 
 @app.get('/')
