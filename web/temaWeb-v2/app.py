@@ -5,6 +5,7 @@ import re
 import csv
 import uuid
 import threading
+import time
 from datetime import datetime, timedelta
 from pathlib import Path
 from functools import lru_cache
@@ -14,6 +15,7 @@ import pandas as pd
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.responses import FileResponse, HTMLResponse
 from fastapi.staticfiles import StaticFiles
+from fastapi.middleware.gzip import GZipMiddleware
 
 TEMA_ROOT = Path(os.environ.get("TEMA_ROOT", r"C:\project\04.app\temaWeb\tema"))
 
@@ -21,8 +23,14 @@ ENABLE_REFRESH_RAW = os.environ.get("ENABLE_REFRESH", "false")
 ENABLE_REFRESH = ENABLE_REFRESH_RAW.strip().lower() in ("1", "true", "yes", "y", "on")
 REFRESH_TOKEN = os.environ.get("REFRESH_TOKEN", "")
 
-app = FastAPI(title="Tema Server", version="final-final-1.4.0")
+app = FastAPI(title="Tema Server", version="final-final-1.5.0")
+app.add_middleware(GZipMiddleware, minimum_size=1024)
 static_dir = Path(__file__).parent / "static"
+
+# response cache TTL(seconds): 체감 속도 개선용
+API_CACHE_TTL = int(os.environ.get("API_CACHE_TTL", "45"))
+_api_cache: Dict[str, Dict[str, Any]] = {}
+
 
 DATE_RE = re.compile(r"^\d{6}$")
 # 테마 CSV는 보통 "1.테마명_1,234.csv" 형태지만, 앞으로는 prefix가 없어도 동작하게 만든다.
@@ -257,6 +265,27 @@ def _recompute_next_ohlcv_for_record(payload: dict) -> None:
 
 def _now_iso() -> str:
     return datetime.now().isoformat(timespec="seconds")
+
+
+def _cache_get(key: str) -> Optional[Any]:
+    item = _api_cache.get(key)
+    if not item:
+        return None
+    if (time.time() - float(item.get("ts", 0))) > API_CACHE_TTL:
+        _api_cache.pop(key, None)
+        return None
+    return item.get("data")
+
+
+def _cache_set(key: str, data: Any) -> Any:
+    _api_cache[key] = {"ts": time.time(), "data": data}
+    # simple bound
+    if len(_api_cache) > 512:
+        # remove oldest ~20%
+        old = sorted(_api_cache.items(), key=lambda kv: kv[1].get("ts", 0))[:100]
+        for k, _v in old:
+            _api_cache.pop(k, None)
+    return data
 
 
 def _list_date_dirs() -> List[str]:
@@ -828,6 +857,7 @@ def _list_theme_csv_files(date_dir: str) -> List[Path]:
     return out
 
 
+@lru_cache(maxsize=256)
 def _compute_ranked_themes(date_dir: str, exclude_bigcaps: bool) -> List[Dict[str, Any]]:
     """
     여기서 "상위 테마"를 계산한다.
@@ -999,9 +1029,14 @@ def record_page():
 
 @app.get("/api/status")
 def api_status():
+    cache_key = "status"
+    cached = _cache_get(cache_key)
+    if cached is not None:
+        return cached
+
     dates = _list_date_dirs()
     latest = dates[-1] if dates else None
-    return {
+    data = {
         "tema_root": str(TEMA_ROOT),
         # UI에서 과거 날짜 선택을 위해 전체 날짜 목록을 내려준다.
         "dates": dates,
@@ -1010,6 +1045,7 @@ def api_status():
         "enable_refresh_raw": ENABLE_REFRESH_RAW,
         "refresh": _refresh_state,
     }
+    return _cache_set(cache_key, data)
 
 
 @app.get("/api/insights/summary")
@@ -1020,13 +1056,18 @@ def api_insights_summary(
 ):
     lookback = max(5, min(int(lookback), 120))
     top_n = max(3, min(int(top_n), 30))
-    data = _compute_theme_insights(lookback=lookback, top_n=top_n, exclude_bigcaps=exclude_bigcaps)
-    return {
+    cache_key = f"insights_summary:{lookback}:{top_n}:{int(bool(exclude_bigcaps))}"
+    cached = _cache_get(cache_key)
+    if cached is not None:
+        return cached
+
+    data = {
         "lookback": lookback,
         "top_n": top_n,
         "exclude_bigcaps": exclude_bigcaps,
-        **data,
+        **_compute_theme_insights(lookback=lookback, top_n=top_n, exclude_bigcaps=exclude_bigcaps),
     }
+    return _cache_set(cache_key, data)
 
 
 @app.get("/api/insights/theme-history")
@@ -1036,14 +1077,21 @@ def api_insights_theme_history(
     exclude_bigcaps: bool = False,
 ):
     lookback = max(10, min(int(lookback), 240))
-    rows = _theme_history_by_title(title=title, lookback=lookback, exclude_bigcaps=exclude_bigcaps)
-    return {
-        "title": title,
+    q = (title or "").strip()
+    cache_key = f"insights_history:{q}:{lookback}:{int(bool(exclude_bigcaps))}"
+    cached = _cache_get(cache_key)
+    if cached is not None:
+        return cached
+
+    rows = _theme_history_by_title(title=q, lookback=lookback, exclude_bigcaps=exclude_bigcaps)
+    data = {
+        "title": q,
         "lookback": lookback,
         "exclude_bigcaps": exclude_bigcaps,
         "count": len(rows),
         "rows": rows,
     }
+    return _cache_set(cache_key, data)
 
 
 @app.get("/api/themes")
@@ -1057,6 +1105,11 @@ def api_themes(
     date_dir = date or _latest_date_dir()
     if date and not DATE_RE.match(date_dir):
         raise HTTPException(400, "date는 yymmdd 형식이어야 합니다.")
+
+    cache_key = f"themes:{date_dir}:{int(limit)}:{int(preview_n)}:{int(bool(exclude_bigcaps))}:{sort}"
+    cached = _cache_get(cache_key)
+    if cached is not None:
+        return cached
 
     forward_ctx = _forward_ctx_for_date_dir(date_dir) if date else {"ok": False, "error": None, "base_trade_date": None, "next_trade_date": None}
 
@@ -1089,7 +1142,7 @@ def api_themes(
             }
         )
 
-    return {
+    data = {
         "date": date_dir,
         "exclude_bigcaps": exclude_bigcaps,
         "sort": sort,
@@ -1102,6 +1155,7 @@ def api_themes(
         },
         "themes": themes_out,
     }
+    return _cache_set(cache_key, data)
 
 
 @app.get("/api/themes/{rank}")
@@ -1114,6 +1168,11 @@ def api_theme_detail(
     date_dir = date or _latest_date_dir()
     if date and not DATE_RE.match(date_dir):
         raise HTTPException(400, "date는 yymmdd 형식이어야 합니다.")
+
+    cache_key = f"theme_detail:{date_dir}:{int(rank)}:{int(bool(exclude_bigcaps))}:{sort}"
+    cached = _cache_get(cache_key)
+    if cached is not None:
+        return cached
 
     forward_ctx = _forward_ctx_for_date_dir(date_dir) if date else {"ok": False, "error": None, "base_trade_date": None, "next_trade_date": None}
 
@@ -1131,7 +1190,7 @@ def api_theme_detail(
     rows = [_normalize_row(r) for r in df.to_dict(orient="records")]
     _enrich_rows_with_forward_metrics(rows, forward_ctx)
 
-    return {
+    data = {
         "date": date_dir,
         "exclude_bigcaps": exclude_bigcaps,
         "sort": sort,
@@ -1148,6 +1207,7 @@ def api_theme_detail(
         "filename": target["filename"],
         "rows": rows,
     }
+    return _cache_set(cache_key, data)
 
 
 @app.get("/api/file/{date_dir}/{filename}")
@@ -1358,6 +1418,12 @@ def _refresh_worker(local_refresh_id: int):
         result = run_once(str(TEMA_ROOT))
         _refresh_state["last_result"] = result
         _refresh_state["last_error"] = None
+        # 데이터 갱신 후 캐시 무효화
+        try:
+            _compute_ranked_themes.cache_clear()
+        except Exception:
+            pass
+        _api_cache.clear()
     except Exception as e:
         _refresh_state["last_error"] = f"{type(e).__name__}: {e}"
     finally:
