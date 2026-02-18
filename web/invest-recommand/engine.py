@@ -268,6 +268,18 @@ def evaluate_asset(asset: Asset) -> Dict | None:
     }
 
 
+def _is_etf_like(row: Dict) -> bool:
+    name = str(row.get("name", "")).lower()
+    category = str(row.get("category", "")).lower()
+    symbol = str(row.get("symbol", "")).upper()
+    if "etf" in name:
+        return True
+    if category in {"equity", "reit", "bond", "metal", "commodity", "etf"}:
+        return True
+    # US ETF symbols often end with known ETF tickers (fallback guard)
+    return symbol in {"SPY", "QQQ", "EEM", "EFA", "VNQ", "TLT", "IEF", "LQD", "GLD", "SLV", "USO", "DBC"}
+
+
 def build_report() -> Dict:
     rows = []
     failed = []
@@ -277,6 +289,9 @@ def build_report() -> Dict:
             failed.append(a.symbol)
         else:
             rows.append(r)
+
+    # 사용자 요청: ETF 제외 (단일 주식만 허용)
+    rows = [r for r in rows if not _is_etf_like(r)]
 
     rows.sort(key=lambda x: x["score"], reverse=True)
 
