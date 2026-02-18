@@ -1,0 +1,122 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Invest Snapshot History</title>
+  <style>
+    body{margin:0;background:#0b1220;color:#e5e7eb;font-family:Arial,sans-serif}
+    .wrap{max-width:1000px;margin:0 auto;padding:20px}
+    .card{background:#111827;border:1px solid #1f2937;border-radius:14px;padding:16px;margin-top:12px}
+    button{background:#2563eb;border:0;color:#fff;padding:9px 12px;border-radius:8px;cursor:pointer}
+    a{color:#93c5fd}
+    .cal-head{display:flex;justify-content:space-between;align-items:center;gap:8px;margin-bottom:10px}
+    .cal-grid{display:grid;grid-template-columns:repeat(7,1fr);gap:6px}
+    .cal-dow{font-size:12px;color:#9ca3af;text-align:center}
+    .cal-day{border:1px solid #1f2937;border-radius:8px;min-height:54px;padding:6px;font-size:12px;position:relative;background:#0f172a;cursor:pointer}
+    .cal-day.empty{opacity:.35;cursor:default}
+    .cal-day.active{outline:2px solid #2563eb}
+    .dot{width:7px;height:7px;border-radius:50%;background:#22c55e;position:absolute;right:6px;bottom:6px}
+    .tiny{font-size:12px;color:#9ca3af}
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <h1>🗂 투자 추천 히스토리</h1>
+    <div class="card">월 단위 캘린더에서 기록된 날짜(●)를 눌러 당시 추천을 조회하세요. <a href="/invest-recommend">현재 추천으로 돌아가기</a></div>
+
+    <div class="card">
+      <div class="cal-head">
+        <button onclick="moveMonth(-1)">◀ 이전달</button>
+        <b id="calTitle">-</b>
+        <button onclick="moveMonth(1)">다음달 ▶</button>
+      </div>
+      <div class="cal-grid" id="calDow"></div>
+      <div class="cal-grid" id="calGrid"></div>
+      <div class="tiny" style="margin-top:8px">● 점이 찍힌 날짜 = 해당 날짜 추천 기록 존재</div>
+    </div>
+
+    <div id="snapshotDetail" class="card">날짜를 선택하면 해당 일자의 추천 기록을 보여줍니다.</div>
+  </div>
+
+<script>
+function fmt(v,d=2){return (v===null||v===undefined)?'-':Number(v).toLocaleString(undefined,{maximumFractionDigits:d});}
+function fmtPct(v,d=2){
+  if(v===null||v===undefined||Number.isNaN(Number(v))) return '-';
+  const n = Number(v);
+  const sign = n>0?'+':'';
+  return `${sign}${n.toLocaleString(undefined,{maximumFractionDigits:d})}%`;
+}
+
+let snapshotDates = new Set();
+let calCursor = new Date();
+let selectedDate = null;
+
+async function loadSnapshots(){
+  const res = await fetch('/api/snapshots');
+  const data = await res.json();
+  snapshotDates = new Set((data.items||[]).map(x=>x.dateKST));
+  renderCalendar();
+}
+
+function renderCalendar(){
+  const y = calCursor.getFullYear();
+  const m = calCursor.getMonth();
+  document.getElementById('calTitle').textContent = `${y}년 ${m+1}월`;
+
+  const dows = ['일','월','화','수','목','금','토'];
+  document.getElementById('calDow').innerHTML = dows.map(d=>`<div class='cal-dow'>${d}</div>`).join('');
+
+  const first = new Date(y,m,1);
+  const start = first.getDay();
+  const lastDate = new Date(y,m+1,0).getDate();
+  const cells = [];
+  for(let i=0;i<start;i++) cells.push(`<div class='cal-day empty'></div>`);
+  for(let d=1; d<=lastDate; d++){
+    const ds = `${y}-${String(m+1).padStart(2,'0')}-${String(d).padStart(2,'0')}`;
+    const has = snapshotDates.has(ds);
+    const active = selectedDate===ds ? 'active' : '';
+    cells.push(`<div class='cal-day ${active}' onclick="pickDate('${ds}')">${d}${has?"<span class='dot'></span>":''}</div>`);
+  }
+  document.getElementById('calGrid').innerHTML = cells.join('');
+}
+
+function moveMonth(delta){
+  calCursor = new Date(calCursor.getFullYear(), calCursor.getMonth()+delta, 1);
+  renderCalendar();
+}
+
+async function pickDate(ds){
+  selectedDate = ds;
+  renderCalendar();
+  const detail = document.getElementById('snapshotDetail');
+  if(!snapshotDates.has(ds)){
+    detail.innerHTML = `<b>${ds}</b><br>이 날짜에는 저장된 기록이 없습니다.`;
+    return;
+  }
+
+  detail.innerHTML = `<b>${ds}</b><br>불러오는 중...`;
+  const res = await fetch(`/api/snapshots/${ds}`);
+  if(!res.ok){
+    detail.innerHTML = `<b>${ds}</b><br>기록을 불러오지 못했습니다.`;
+    return;
+  }
+  const s = await res.json();
+  const top = s.topPick || {};
+  const risk = (s.riskAdjustedTop5||[]).slice(0,5).map((x,i)=>`#${i+1} ${x.symbol} (${fmtPct(x.expectedReturnPct)} / RR ${fmt(x.riskReward)})`).join('<br>');
+  const ret = (s.highReturnTop5||[]).slice(0,5).map((x,i)=>`#${i+1} ${x.symbol} (${fmtPct(x.expectedReturnPct)})`).join('<br>');
+
+  detail.innerHTML = `
+    <b>${ds} 저장 기록</b><br>
+    생성시각: ${new Date(s.generatedAt).toLocaleString()}<br><br>
+    <b>Top Pick</b><br>
+    ${top.symbol || '-'} (${top.name || '-'}) / 점수 ${fmt(top.score)} / 기대수익 ${fmtPct(top.expectedReturnPct)} / 손실 ${fmtPct(top.expectedLossPct)}<br><br>
+    <b>위험대비 기대수익 상위 5</b><br>${risk || '-'}<br><br>
+    <b>절대 기대수익 상위 5</b><br>${ret || '-'}
+  `;
+}
+
+loadSnapshots();
+</script>
+</body>
+</html>

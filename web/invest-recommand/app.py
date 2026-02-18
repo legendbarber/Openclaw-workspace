@@ -79,6 +79,16 @@ def invest_recommend_page():
     return send_from_directory(app.static_folder, 'index.html')
 
 
+@app.get('/invest-recommend/history')
+def invest_history_page():
+    return send_from_directory(f"{app.static_folder}/invest-history", 'index.html')
+
+
+@app.get('/invest-recommend/history/<path:filename>')
+def invest_history_assets(filename):
+    return send_from_directory(f"{app.static_folder}/invest-history", filename)
+
+
 # backward compatibility
 @app.get('/invest-recommand')
 def invest_recommand_alias():
