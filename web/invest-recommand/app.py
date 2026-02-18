@@ -121,7 +121,18 @@ def invest_history_assets(filename):
     return send_from_directory(f"{app.static_folder}/invest-history", filename)
 
 
-# 별도 디렉터리/경로 제공: /invest-history
+# invest-recommend 하위 캘린더 경로
+@app.get('/invest-recommend/calendar')
+def invest_calendar_page_nested():
+    return send_from_directory(f"{app.static_folder}/invest-history", 'index.html')
+
+
+@app.get('/invest-recommend/calendar/<path:filename>')
+def invest_calendar_assets_nested(filename):
+    return send_from_directory(f"{app.static_folder}/invest-history", filename)
+
+
+# 기존 경로 호환
 @app.get('/invest-history')
 def invest_history_root_page():
     return send_from_directory(f"{app.static_folder}/invest-history", 'index.html')
@@ -132,15 +143,14 @@ def invest_history_root_assets(filename):
     return send_from_directory(f"{app.static_folder}/invest-history", filename)
 
 
-# 짧은 URL 별칭: /calendar
 @app.get('/calendar')
 def invest_calendar_page():
-    return send_from_directory(f"{app.static_folder}/invest-history", 'index.html')
+    return redirect('/invest-recommend/calendar', code=302)
 
 
 @app.get('/calendar/<path:filename>')
 def invest_calendar_assets(filename):
-    return send_from_directory(f"{app.static_folder}/invest-history", filename)
+    return redirect(f'/invest-recommend/calendar/{filename}', code=302)
 
 
 # backward compatibility
