@@ -53,7 +53,7 @@ function setLoading(on){
 async function apiGet(url){
   setLoading(true);
   try{
-    const res = await fetch(url);
+    const res = await fetch(url, { cache: 'no-store' });
     if(!res.ok) throw new Error('HTTP '+res.status);
     return await res.json();
   } finally {
@@ -100,17 +100,17 @@ function recommendationWhy(r, mode='risk'){
   if(mode==='risk') reasons.push(`RR ${fmt(r.riskReward)} (위험 1 대비 기대수익)`);
   if(mode==='return') reasons.push(`예상수익 ${fmtPct(r.expectedReturnPct)} (1차 익절 기준)`);
 
-  reasons.push(`모멘텀 ${fmt(m.score)}점 (1M ${fmtPct(m.m1Pct)} / 3M ${fmtPct(m.m3Pct)} / 6M ${fmtPct(m.m6Pct)})`);
   reasons.push(`리포트합의 ${fmt(rc.score)}점 (목표가 괴리 ${fmtPct(rc.upsidePct)})`);
   reasons.push(`군중신호 ${fmt(crowd.score)}점 (톤 ${fmt(crowd.tone,0)}, 헤드라인 ${fmt(crowd.headlineCount,0)}개)`);
   reasons.push(`유동성 ${fmt(liq)}점 · 리스크 ${fmt(risk.score)}점 (변동성 ${fmtPct(risk.volPct)} / MDD ${fmtPct(risk.maxDrawdownPct)})`);
-  reasons.push(`종합점수 ${fmt(r.score)} = 0.35R + 0.25M + 0.20C + 0.10L + 0.10V`);
+  reasons.push(`(참고) 모멘텀 ${fmt(m.score)}점 (1M ${fmtPct(m.m1Pct)} / 3M ${fmtPct(m.m3Pct)} / 6M ${fmtPct(m.m6Pct)})`);
+  reasons.push(`종합점수 ${fmt(r.score)} = 0.45R + 0.25C + 0.15L + 0.15V`);
 
   return reasons.join('<br>');
 }
 
 async function loadData(){
-  const d = await apiGet('/api/report');
+  const d = await apiGet(`/api/report?t=${Date.now()}`);
 
   document.getElementById('meta').innerHTML = `
     <b>생성시각:</b> ${new Date(d.generatedAt).toLocaleString()}<br>
