@@ -217,12 +217,12 @@ def evaluate_asset(asset: Asset) -> Dict | None:
     liquidity = _liquidity_score(asset.symbol)
     risk = _risk_score(s)
 
+    # 사용자 요청 반영: 추천 점수에서 모멘텀은 제외
     score = (
-        0.35 * report_consensus["score"] +
-        0.25 * momentum["score"] +
-        0.20 * crowd["score"] +
-        0.10 * liquidity +
-        0.10 * risk["score"]
+        0.45 * report_consensus["score"] +
+        0.25 * crowd["score"] +
+        0.15 * liquidity +
+        0.15 * risk["score"]
     )
 
     cur = float(s.iloc[-1])
@@ -334,8 +334,8 @@ def build_report() -> Dict:
 
     report = {
         "generatedAt": datetime.now(UTC).isoformat().replace("+00:00", "Z"),
-        "model": "KR/US Single-Stock Dual Ranking v3",
-        "methodology": "S=0.35R+0.25M+0.20C+0.10L+0.10V + Dual Rank(RR/Return)",
+        "model": "KR/US Single-Stock Dual Ranking v4 (No Momentum)",
+        "methodology": "S=0.45R+0.25C+0.15L+0.15V + Dual Rank(RR/Return)",
         "topPick": top,
         "rankings": rows,
         "riskAdjustedRankings": risk_adjusted,
