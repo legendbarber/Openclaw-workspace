@@ -1,12 +1,50 @@
 from flask import Flask, jsonify, send_from_directory, redirect
-from engine import build_report
+from engine import build_report, save_daily_snapshot, list_snapshots
+import threading
+import time
+from datetime import datetime
+from zoneinfo import ZoneInfo
 
 app = Flask(__name__, static_folder="public")
+KST = ZoneInfo("Asia/Seoul")
+
+
+def _snapshot_worker():
+    """매일 KST 20:00~20:04 사이 1회 스냅샷 저장."""
+    last_saved_day = None
+    while True:
+        try:
+            now = datetime.now(KST)
+            today = now.strftime("%Y-%m-%d")
+            if now.hour == 20 and now.minute <= 4 and last_saved_day != today:
+                save_daily_snapshot(force=False)
+                last_saved_day = today
+        except Exception:
+            pass
+        time.sleep(60)
+
+
+threading.Thread(target=_snapshot_worker, daemon=True).start()
 
 
 @app.get('/api/report')
 def api_report():
     return jsonify(build_report())
+
+
+@app.get('/api/snapshot/save')
+def api_snapshot_save():
+    return jsonify(save_daily_snapshot(force=False))
+
+
+@app.get('/api/snapshot/force')
+def api_snapshot_force():
+    return jsonify(save_daily_snapshot(force=True))
+
+
+@app.get('/api/snapshots')
+def api_snapshots():
+    return jsonify({"items": list_snapshots(limit=365)})
 
 
 @app.get('/')

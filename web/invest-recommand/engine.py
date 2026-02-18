@@ -8,6 +8,7 @@ from dataclasses import dataclass
 from datetime import datetime, UTC
 from pathlib import Path
 from typing import Dict, List
+from zoneinfo import ZoneInfo
 
 import numpy as np
 import pandas as pd
@@ -48,6 +49,8 @@ UNIVERSE = [
 ]
 
 STATE_PATH = Path(__file__).resolve().parent / "state_log.json"
+SNAPSHOT_DIR = Path(__file__).resolve().parent / "snapshots"
+KST = ZoneInfo("Asia/Seoul")
 POSITIVE = ["beat", "strong", "upgrade", "rally", "surge", "record", "gain"]
 NEGATIVE = ["miss", "downgrade", "drop", "fall", "weak", "risk", "lawsuit"]
 
@@ -363,3 +366,52 @@ def _append_log(report: Dict):
     state.append(item)
     state = state[-200:]
     STATE_PATH.write_text(json.dumps(state, ensure_ascii=False, indent=2), encoding="utf-8")
+
+
+def save_daily_snapshot(force: bool = False) -> Dict:
+    """Save one snapshot per KST day for backtesting validation.
+
+    Default behavior: create/update only once per day.
+    If force=True, always refresh today's snapshot.
+    """
+    SNAPSHOT_DIR.mkdir(parents=True, exist_ok=True)
+    now_kst = datetime.now(KST)
+    day = now_kst.strftime("%Y-%m-%d")
+    path = SNAPSHOT_DIR / f"{day}.json"
+
+    if path.exists() and not force:
+        saved = json.loads(path.read_text(encoding="utf-8"))
+        return {"saved": False, "reason": "already_exists", "path": str(path), "date": day, "generatedAt": saved.get("generatedAt")}
+
+    report = build_report()
+    payload = {
+        "dateKST": day,
+        "savedAtKST": now_kst.isoformat(),
+        "generatedAt": report.get("generatedAt"),
+        "model": report.get("model"),
+        "methodology": report.get("methodology"),
+        "topPick": report.get("topPick"),
+        "riskAdjustedTop5": (report.get("riskAdjustedRankings") or [])[:5],
+        "highReturnTop5": (report.get("highReturnRankings") or [])[:5],
+        "failed": report.get("failed", []),
+    }
+    path.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
+    return {"saved": True, "path": str(path), "date": day, "generatedAt": payload.get("generatedAt")}
+
+
+def list_snapshots(limit: int = 60) -> List[Dict]:
+    SNAPSHOT_DIR.mkdir(parents=True, exist_ok=True)
+    files = sorted(SNAPSHOT_DIR.glob("*.json"), reverse=True)[: max(1, limit)]
+    out = []
+    for p in files:
+        try:
+            j = json.loads(p.read_text(encoding="utf-8"))
+            out.append({
+                "dateKST": j.get("dateKST") or p.stem,
+                "generatedAt": j.get("generatedAt"),
+                "topSymbol": (j.get("topPick") or {}).get("symbol"),
+                "path": str(p),
+            })
+        except Exception:
+            out.append({"dateKST": p.stem, "generatedAt": None, "topSymbol": None, "path": str(p)})
+    return out
