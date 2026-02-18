@@ -1,0 +1,58 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Tema - 기록</title>
+
+  <link rel="manifest" href="/tema-web-v2/static/manifest.webmanifest">
+  <link rel="stylesheet" href="/tema-web-v2/static/styles.css" />
+  <meta name="theme-color" content="#0ea5e9"/>
+  <link rel="icon" href="/tema-web-v2/static/favicon.ico" />
+</head>
+<body data-page="record">
+  <noscript>
+    <div style="padding:12px; font-weight:900; color:#b91c1c;">
+      JavaScript가 꺼져 있어 화면을 표시할 수 없습니다. (브라우저 설정에서 JavaScript를 켜주세요)
+    </div>
+  </noscript>
+
+  <div id="topProgress" class="top-progress hidden" aria-hidden="true">
+    <div class="top-progress-bar"></div>
+    <div id="topProgressText" class="top-progress-text">불러오는 중…</div>
+  </div>
+
+  <header class="topbar">
+    <div class="topbar-inner">
+      <div>
+        <div class="app-title">기록</div>
+        <div id="subline" class="subline"></div>
+      </div>
+      <div class="btnrow">
+        <a class="btn" href="/tema-web-v2" title="테마 목록">홈</a>
+        <button id="btnInstall" class="btn ghost" style="display:none;">설치</button>
+        <button id="btnRefresh" class="btn primary">새로고침</button>
+      </div>
+    </div>
+  </header>
+
+  <main class="container">
+    <section class="record-toolbar">
+      <div class="record-toolbar-left">
+        <button id="btnRecordReload" class="btn">새로고침</button>
+        <button id="btnRecordSort" class="btn">날짜 ▼</button>
+        <input id="inpRecordSearch" class="ctl-input" placeholder="검색: 종목/테마/코드" />
+      </div>
+      <div class="record-toolbar-right">
+        <a class="btn" href="/tema-web-v2/api/record" target="_blank" rel="noreferrer">CSV</a>
+      </div>
+    </section>
+
+    <div id="recordMeta" class="record-meta"></div>
+    <div id="recordWrap" class="record-wrap"></div>
+  </main>
+
+  <div id="toastHost" class="toast-host" aria-live="polite" aria-atomic="true"></div>
+  <script src="/tema-web-v2/static/app.js"></script>
+</body>
+</html>

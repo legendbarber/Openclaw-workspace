@@ -1,5 +1,7 @@
 (() => {
-  const BUILD_ID = "ui-2.1.0";
+  const BUILD_ID = "ui-2.2.0";
+  const BASE_PATH = "/tema-web-v2";
+  const API_BASE = `${BASE_PATH}/api`;
   const $ = (sel) => document.querySelector(sel);
 
   const page = (document.body?.dataset?.page || "index").toLowerCase();
@@ -156,7 +158,7 @@
 
   function navigateToTheme(rank){
     const qs = buildQuery({ rank: String(rank) });
-    location.href = `/theme?${qs}`;
+    location.href = `${BASE_PATH}/theme?${qs}`;
   }
 
   // ---- UI helpers ----
@@ -341,7 +343,7 @@
 
   // ---- data loading ----
   async function loadStatus(){
-    const r = await fetch("/api/status", { cache: "no-store" });
+    const r = await fetch(`${API_BASE}/status`, { cache: "no-store" });
     const j = await r.json();
 
     state.enableRefresh = !!j.enable_refresh;
@@ -400,7 +402,7 @@
     if (state.pollTimer) return;
     state.pollTimer = setInterval(async () => {
       try{
-        const r = await fetch("/api/status", { cache: "no-store" });
+        const r = await fetch(`${API_BASE}/status`, { cache: "no-store" });
         const j = await r.json();
         const rf = j.refresh || {};
         if (!rf.in_progress){
@@ -433,7 +435,7 @@
     setRefreshButtonLoading(true);
 
     try{
-      const r = await fetch("/api/refresh", { method: "POST" });
+      const r = await fetch(`${API_BASE}/refresh`, { method: "POST" });
       if (r.status === 409){
         startPolling();
         return;
@@ -571,7 +573,7 @@
     const grid = $("#insightGrid");
     if (!grid) return;
     try{
-      const r = await fetch(`/api/insights/summary?lookback=20&top_n=10&exclude_bigcaps=${state.excludeBigcaps?1:0}`, { cache: "no-store" });
+      const r = await fetch(`${API_BASE}/insights/summary?lookback=20&top_n=10&exclude_bigcaps=${state.excludeBigcaps?1:0}`, { cache: "no-store" });
       if (!r.ok) throw new Error(await r.text());
       const j = await r.json();
       renderInsights(j);
@@ -590,7 +592,7 @@
 
     out.textContent = "조회 중...";
     try{
-      const r = await fetch(`/api/insights/theme-history?title=${encodeURIComponent(q)}&lookback=90&exclude_bigcaps=${state.excludeBigcaps?1:0}`, { cache: "no-store" });
+      const r = await fetch(`${API_BASE}/insights/theme-history?title=${encodeURIComponent(q)}&lookback=90&exclude_bigcaps=${state.excludeBigcaps?1:0}`, { cache: "no-store" });
       if (!r.ok) throw new Error(await r.text());
       const j = await r.json();
       const rows = j.rows || [];
@@ -607,7 +609,7 @@
 
     showProgress(true, "테마 불러오는 중…");
     try{
-      const r = await fetch(`/api/themes?${buildQuery({ limit: "4", preview_n: "6" })}`, { cache: "no-store" });
+      const r = await fetch(`${API_BASE}/themes?${buildQuery({ limit: "4", preview_n: "6" })}`, { cache: "no-store" });
       if (!r.ok) throw new Error(await r.text());
       const j = await r.json();
 
@@ -750,7 +752,7 @@
         d1_high_rate: row.d1_high_rate || "",
       };
 
-      const r = await fetch("/api/record", {
+      const r = await fetch(`${API_BASE}/record`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(payload),
@@ -780,7 +782,7 @@
 
     showProgress(true, "테마 상세 불러오는 중…");
     try{
-      const r = await fetch(`/api/themes/${rank}?${buildQuery()}`, { cache: "no-store" });
+      const r = await fetch(`${API_BASE}/themes/${rank}?${buildQuery()}`, { cache: "no-store" });
       if (!r.ok) throw new Error(await r.text());
       const j = await r.json();
 
@@ -912,7 +914,7 @@
       if (r.theme_rank){
         const a = document.createElement("a");
         a.className = "record-theme";
-        a.href = `/theme?${buildQuery({ rank: safeText(r.theme_rank), date: safeText(r.date) })}`;
+        a.href = `${BASE_PATH}/theme?${buildQuery({ rank: safeText(r.theme_rank), date: safeText(r.date) })}`;
         a.textContent = r.theme_title ? `#${r.theme_rank} ${r.theme_title}` : `#${r.theme_rank}`;
         tdTheme.appendChild(a);
       } else {
@@ -1044,7 +1046,7 @@
     }
 
     try{
-      const r = await fetch(`/api/record/${encodeURIComponent(row.id)}`, { method: "DELETE" });
+      const r = await fetch(`${API_BASE}/record/${encodeURIComponent(row.id)}`, { method: "DELETE" });
       if (!r.ok) throw new Error(await r.text());
       toast("삭제 완료", `${row.date} · ${row.name}`, false);
       await loadRecordPage();
@@ -1056,7 +1058,7 @@
   async function loadRecordPage(){
     showProgress(true, "기록 불러오는 중…");
     try{
-      const r = await fetch("/api/record/json", { cache: "no-store" });
+      const r = await fetch(`${API_BASE}/record/json`, { cache: "no-store" });
       if (!r.ok) throw new Error(await r.text());
       const j = await r.json();
       const rows = j.records || j.rows || j || [];
@@ -1106,7 +1108,7 @@
 
     // SW register (network-only)
     if ("serviceWorker" in navigator){
-      try{ await navigator.serviceWorker.register("/static/sw.js"); }catch(e){}
+      try{ await navigator.serviceWorker.register(`${BASE_PATH}/static/sw.js`); }catch(e){}
     }
   }
 

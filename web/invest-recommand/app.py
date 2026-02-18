@@ -1,4 +1,4 @@
-from flask import Flask, jsonify, send_from_directory, redirect
+from flask import Flask, jsonify, send_from_directory, redirect, Response, request
 from engine import (
     build_report,
     save_daily_snapshot,
@@ -11,9 +11,13 @@ import threading
 import time
 from datetime import datetime
 from zoneinfo import ZoneInfo
+import urllib.request
+import urllib.parse
+import urllib.error
 
 app = Flask(__name__, static_folder="public")
 KST = ZoneInfo("Asia/Seoul")
+TEMA_WEB_V2_ORIGIN = "http://127.0.0.1:3010"
 
 # lightweight in-memory cache for faster UI response
 _REPORT_CACHE = {"ts": 0.0, "data": None}
@@ -95,6 +99,7 @@ def home():
       <ul>
         <li><a style='color:#93c5fd' href='/invest-recommend'>/invest-recommend</a> (투자 추천)</li>
         <li><a style='color:#93c5fd' href='/invest-history'>/invest-history</a> (추천 히스토리 캘린더)</li>
+        <li><a style='color:#93c5fd' href='/tema-web-v2'>/tema-web-v2</a> (테마주 업그레이드 v2)</li>
         <li><a style='color:#93c5fd' href='/game-demo'>/game-demo</a> (스와이프 게임 데모 v1)</li>
         <li><a style='color:#93c5fd' href='/game-demo-v2'>/game-demo-v2</a> (퍼즐 머지 데모 v2)</li>
         <li><a style='color:#93c5fd' href='/game-foldlight'>/game-foldlight</a> (독창 퍼즐 Foldlight 프로토)</li>
@@ -154,6 +159,49 @@ def invest_calendar_assets(filename):
 
 
 # backward compatibility
+def _proxy_to_tema_v2(subpath: str = ""):
+    target = f"{TEMA_WEB_V2_ORIGIN}/{subpath.lstrip('/')}"
+    qs = request.query_string.decode('utf-8', errors='ignore')
+    if qs:
+        target = f"{target}?{qs}"
+
+    method = request.method.upper()
+    body = request.get_data() if method in {"POST", "PUT", "PATCH", "DELETE"} else None
+
+    headers = {"User-Agent": request.headers.get("User-Agent", "Mozilla/5.0")}
+    ct = request.headers.get("Content-Type")
+    if ct:
+        headers["Content-Type"] = ct
+
+    req = urllib.request.Request(target, data=body, headers=headers, method=method)
+    try:
+        with urllib.request.urlopen(req, timeout=30) as resp:
+            body_bytes = resp.read()
+            content_type = resp.headers.get("Content-Type", "text/html; charset=utf-8")
+            out = Response(body_bytes, status=resp.status, content_type=content_type)
+            # subpath deploy를 위한 base href 주입 (html에만)
+            if "text/html" in content_type.lower():
+                text = body_bytes.decode('utf-8', errors='ignore')
+                if '<head>' in text and 'base href="/tema-web-v2/"' not in text:
+                    text = text.replace('<head>', '<head><base href="/tema-web-v2/">', 1)
+                out = Response(text, status=resp.status, content_type=content_type)
+            return out
+    except urllib.error.HTTPError as e:
+        return Response(e.read(), status=e.code, content_type=e.headers.get("Content-Type", "text/plain"))
+    except Exception as e:
+        return Response(f"temaWeb-v2 backend unavailable: {e}", status=502, content_type="text/plain; charset=utf-8")
+
+
+@app.route('/tema-web-v2', methods=['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'])
+def tema_web_v2_root():
+    return _proxy_to_tema_v2('')
+
+
+@app.route('/tema-web-v2/<path:subpath>', methods=['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'])
+def tema_web_v2_subpath(subpath: str):
+    return _proxy_to_tema_v2(subpath)
+
+
 @app.get('/invest-recommand')
 def invest_recommand_alias():
     return send_from_directory(app.static_folder, 'index.html')
