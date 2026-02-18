@@ -63,6 +63,7 @@ def home():
       <p>이 주소를 앞으로 모든 웹서버의 메인 허브로 사용합니다.</p>
       <ul>
         <li><a style='color:#93c5fd' href='/invest-recommend'>/invest-recommend</a> (투자 추천)</li>
+        <li><a style='color:#93c5fd' href='/invest-history'>/invest-history</a> (추천 히스토리 캘린더)</li>
         <li><a style='color:#93c5fd' href='/game-demo'>/game-demo</a> (스와이프 게임 데모 v1)</li>
         <li><a style='color:#93c5fd' href='/game-demo-v2'>/game-demo-v2</a> (퍼즐 머지 데모 v2)</li>
         <li><a style='color:#93c5fd' href='/game-foldlight'>/game-foldlight</a> (독창 퍼즐 Foldlight 프로토)</li>
@@ -86,6 +87,17 @@ def invest_history_page():
 
 @app.get('/invest-recommend/history/<path:filename>')
 def invest_history_assets(filename):
+    return send_from_directory(f"{app.static_folder}/invest-history", filename)
+
+
+# 별도 디렉터리/경로 제공: /invest-history
+@app.get('/invest-history')
+def invest_history_root_page():
+    return send_from_directory(f"{app.static_folder}/invest-history", 'index.html')
+
+
+@app.get('/invest-history/<path:filename>')
+def invest_history_root_assets(filename):
     return send_from_directory(f"{app.static_folder}/invest-history", filename)
 
 
