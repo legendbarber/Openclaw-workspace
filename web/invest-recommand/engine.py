@@ -206,6 +206,85 @@ def _risk_score(s: pd.Series) -> Dict:
     return {"volPct": round(v, 2), "maxDrawdownPct": round(dd, 2), "score": round(score, 2)}
 
 
+def _technical_score(s: pd.Series) -> Dict:
+    """가격/차트 기반 기술적 진입 타이밍 점수 (모멘텀과 분리)."""
+    close = s.astype(float)
+    cur = float(close.iloc[-1])
+
+    ma20 = float(close.rolling(20).mean().iloc[-1])
+    ma60 = float(close.rolling(60).mean().iloc[-1])
+    ma120 = float(close.rolling(120).mean().iloc[-1]) if len(close) >= 120 else ma60
+
+    # RSI(14)
+    delta = close.diff()
+    gain = delta.where(delta > 0, 0.0)
+    loss = (-delta.where(delta < 0, 0.0))
+    avg_gain = float(gain.rolling(14).mean().iloc[-1])
+    avg_loss = float(loss.rolling(14).mean().iloc[-1])
+    if avg_loss == 0:
+        rsi14 = 100.0
+    else:
+        rs = avg_gain / avg_loss
+        rsi14 = 100 - (100 / (1 + rs))
+
+    dist_ma20 = (cur / ma20 - 1) * 100 if ma20 else 0.0
+    high20 = float(close.tail(20).max())
+    from_high20 = (cur / high20 - 1) * 100 if high20 else 0.0
+
+    score = 50.0
+
+    # 1) 추세 정합성: 장기적으로 우상향 구조 선호
+    if ma20 > ma60 > ma120:
+        score += 15
+    elif ma20 > ma60:
+        score += 8
+    else:
+        score -= 8
+
+    # 2) RSI 과열/침체 필터: 과열 추격 페널티, 적정 눌림 선호
+    if 38 <= rsi14 <= 55:
+        score += 20
+        setup = "pullback-in-uptrend"
+    elif 55 < rsi14 <= 68:
+        score += 8
+        setup = "healthy-trend"
+    elif rsi14 > 72:
+        score -= 20
+        setup = "overbought"
+    elif rsi14 < 30:
+        score -= 8
+        setup = "falling-knife-risk"
+    else:
+        setup = "neutral"
+
+    # 3) 이격도: 너무 벌어진 추격 매수 방지
+    if dist_ma20 > 8:
+        score -= 18
+    elif dist_ma20 > 4:
+        score -= 8
+    elif -6 <= dist_ma20 <= -1:
+        score += 8
+
+    # 4) 최근 고점 대비 눌림
+    if -10 <= from_high20 <= -3:
+        score += 10
+    elif from_high20 < -18:
+        score -= 10
+
+    score = float(np.clip(score, 0, 100))
+
+    return {
+        "score": round(score, 2),
+        "rsi14": round(float(rsi14), 2),
+        "distMa20Pct": round(float(dist_ma20), 2),
+        "from20dHighPct": round(float(from_high20), 2),
+        "ma20": round(ma20, 2),
+        "ma60": round(ma60, 2),
+        "ma120": round(ma120, 2),
+        "setup": setup,
+    }
+
+
 def evaluate_asset(asset: Asset) -> Dict | None:
     s = _download_close(asset.symbol, "1y")
     if s is None:
@@ -216,13 +295,15 @@ def evaluate_asset(asset: Asset) -> Dict | None:
     crowd = _news(asset.symbol, asset.name)
     liquidity = _liquidity_score(asset.symbol)
     risk = _risk_score(s)
+    technical = _technical_score(s)
 
-    # 사용자 요청 반영: 추천 점수에서 모멘텀은 제외
+    # 사용자 요청 반영: 모멘텀 제외 + 기술적 분석(차트/가격) 반영
     score = (
-        0.45 * report_consensus["score"] +
+        0.35 * report_consensus["score"] +
         0.25 * crowd["score"] +
         0.15 * liquidity +
-        0.15 * risk["score"]
+        0.10 * risk["score"] +
+        0.15 * technical["score"]
     )
 
     cur = float(s.iloc[-1])
@@ -251,6 +332,7 @@ def evaluate_asset(asset: Asset) -> Dict | None:
         "components": {
             "reportConsensus": report_consensus,
             "momentum": momentum,
+            "technical": technical,
             "crowd": crowd,
             "liquidityScore": liquidity,
             "risk": risk,
@@ -334,8 +416,8 @@ def build_report() -> Dict:
 
     report = {
         "generatedAt": datetime.now(UTC).isoformat().replace("+00:00", "Z"),
-        "model": "KR/US Single-Stock Dual Ranking v4 (No Momentum)",
-        "methodology": "S=0.45R+0.25C+0.15L+0.15V + Dual Rank(RR/Return)",
+        "model": "KR/US Single-Stock Dual Ranking v5 (No Momentum + Technical)",
+        "methodology": "S=0.35R+0.25C+0.15L+0.10V+0.15T + Dual Rank(RR/Return)",
         "topPick": top,
         "rankings": rows,
         "riskAdjustedRankings": risk_adjusted,

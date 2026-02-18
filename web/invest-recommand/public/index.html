@@ -94,6 +94,7 @@ function recommendationWhy(r, mode='risk'){
   const rc = c.reportConsensus || {};
   const crowd = c.crowd || {};
   const risk = c.risk || {};
+  const tech = c.technical || {};
   const liq = c.liquidityScore;
 
   const reasons = [];
@@ -102,9 +103,10 @@ function recommendationWhy(r, mode='risk'){
 
   reasons.push(`리포트합의 ${fmt(rc.score)}점 (목표가 괴리 ${fmtPct(rc.upsidePct)})`);
   reasons.push(`군중신호 ${fmt(crowd.score)}점 (톤 ${fmt(crowd.tone,0)}, 헤드라인 ${fmt(crowd.headlineCount,0)}개)`);
+  reasons.push(`기술분석 ${fmt(tech.score)}점 (RSI ${fmt(tech.rsi14)} / MA20 이격 ${fmtPct(tech.distMa20Pct)} / 20일고점대비 ${fmtPct(tech.from20dHighPct)} / 셋업 ${tech.setup||'-'})`);
   reasons.push(`유동성 ${fmt(liq)}점 · 리스크 ${fmt(risk.score)}점 (변동성 ${fmtPct(risk.volPct)} / MDD ${fmtPct(risk.maxDrawdownPct)})`);
   reasons.push(`(참고) 모멘텀 ${fmt(m.score)}점 (1M ${fmtPct(m.m1Pct)} / 3M ${fmtPct(m.m3Pct)} / 6M ${fmtPct(m.m6Pct)})`);
-  reasons.push(`종합점수 ${fmt(r.score)} = 0.45R + 0.25C + 0.15L + 0.15V`);
+  reasons.push(`종합점수 ${fmt(r.score)} = 0.35R + 0.25C + 0.15L + 0.10V + 0.15T`);
 
   return reasons.join('<br>');
 }
@@ -211,9 +213,9 @@ async function loadData(){
       추천지수: ${fmt(c.reportConsensus.recommendationMean)} / 의견수: ${fmt(c.reportConsensus.analystOpinions,0)}
     </div>
     <div class='card'>
-      <b>M) 가격 모멘텀</b><br>
-      점수: ${fmt(c.momentum.score)}<br>
-      1M: ${fmt(c.momentum.m1Pct)}% / 3M: ${fmt(c.momentum.m3Pct)}% / 6M: ${fmt(c.momentum.m6Pct)}%
+      <b>T) 기술적 분석(차트/가격)</b><br>
+      점수: ${fmt(c.technical?.score)} / 셋업: ${c.technical?.setup||'-'}<br>
+      RSI(14): ${fmt(c.technical?.rsi14)} / MA20 이격: ${fmt(c.technical?.distMa20Pct)}% / 20일 고점대비: ${fmt(c.technical?.from20dHighPct)}%
     </div>
     <div class='card'>
       <b>C) 군중/뉴스 시그널</b><br>
@@ -224,6 +226,11 @@ async function loadData(){
       <b>L+V) 유동성/리스크</b><br>
       유동성 점수: ${fmt(c.liquidityScore)}<br>
       리스크 점수: ${fmt(c.risk.score)} / 변동성: ${fmt(c.risk.volPct)}% / 최대낙폭: ${fmt(c.risk.maxDrawdownPct)}%
+    </div>
+    <div class='card'>
+      <b>(참고) M) 가격 모멘텀</b><br>
+      점수: ${fmt(c.momentum.score)}<br>
+      1M: ${fmt(c.momentum.m1Pct)}% / 3M: ${fmt(c.momentum.m3Pct)}% / 6M: ${fmt(c.momentum.m6Pct)}%
     </div>
   `;
 }
