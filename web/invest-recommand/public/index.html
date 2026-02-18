@@ -60,6 +60,26 @@ function expectedHorizon(ttlTradingDays){
   if(d<=7) return `단기~스윙(약 ${d}거래일 이내)`;
   return `스윙(약 ${d}거래일 이내)`;
 }
+function recommendationWhy(r, mode='risk'){
+  const c = r?.components || {};
+  const m = c.momentum || {};
+  const rc = c.reportConsensus || {};
+  const crowd = c.crowd || {};
+  const risk = c.risk || {};
+  const liq = c.liquidityScore;
+
+  const reasons = [];
+  if(mode==='risk') reasons.push(`RR ${fmt(r.riskReward)} (위험 1 대비 기대수익)`);
+  if(mode==='return') reasons.push(`예상수익 ${fmtPct(r.expectedReturnPct)} (1차 익절 기준)`);
+
+  reasons.push(`모멘텀 ${fmt(m.score)}점 (1M ${fmtPct(m.m1Pct)} / 3M ${fmtPct(m.m3Pct)} / 6M ${fmtPct(m.m6Pct)})`);
+  reasons.push(`리포트합의 ${fmt(rc.score)}점 (목표가 괴리 ${fmtPct(rc.upsidePct)})`);
+  reasons.push(`군중신호 ${fmt(crowd.score)}점 (톤 ${fmt(crowd.tone,0)}, 헤드라인 ${fmt(crowd.headlineCount,0)}개)`);
+  reasons.push(`유동성 ${fmt(liq)}점 · 리스크 ${fmt(risk.score)}점 (변동성 ${fmtPct(risk.volPct)} / MDD ${fmtPct(risk.maxDrawdownPct)})`);
+  reasons.push(`종합점수 ${fmt(r.score)} = 0.35R + 0.25M + 0.20C + 0.10L + 0.10V`);
+
+  return reasons.join('<br>');
+}
 
 async function loadData(){
   const res = await fetch('/api/report');
@@ -105,6 +125,7 @@ async function loadData(){
     <div><b>예상 손실률:</b> ${fmtPct(topLossPct)} / <b>예상 수익률:</b> 1차 ${fmtPct(topProfit1Pct)} · 2차 ${fmtPct(topProfit2Pct)}</div>
     <div><b>수익률 평가 시점:</b> 목표가 도달 시점 기준 (${expectedHorizon(x.plan.ttlTradingDays)})</div>
     <div>유효기간: ${x.plan.ttlTradingDays}거래일</div>
+    <div style='margin-top:8px'><b>추천 근거:</b><br>${recommendationWhy(x, 'risk')}</div>
     <div>무효화 조건: ${x.plan.invalidationRule}</div>
     <div style='margin-top:8px'>
       <a href='${x.links.yahoo}' target='_blank'>Yahoo</a> ·
@@ -130,7 +151,8 @@ async function loadData(){
       손절: ${fmt(r.plan.stopLoss)} / 익절1: ${fmt(r.plan.takeProfit1)}<br>
       <b>예상 손실률:</b> ${fmtPct(lossPct)} / <b>예상 수익률:</b> ${fmtPct(profitPct)}<br>
       <b>RR(기대수익/위험):</b> ${fmt(r.riskReward || (profitPct && lossPct ? (profitPct/Math.abs(lossPct)) : null))}<br>
-      <b>수익률 평가 시점:</b> ${expectedHorizon(r.plan.ttlTradingDays)}
+      <b>수익률 평가 시점:</b> ${expectedHorizon(r.plan.ttlTradingDays)}<br>
+      <b>추천 근거:</b> ${recommendationWhy(r, 'risk')}
     </div>
   `}).join('');
 
@@ -148,7 +170,8 @@ async function loadData(){
       손절: ${fmt(r.plan.stopLoss)} / 익절1: ${fmt(r.plan.takeProfit1)}<br>
       <b>예상 손실률:</b> ${fmtPct(lossPct)} / <b>예상 수익률:</b> ${fmtPct(profitPct)}<br>
       <b>RR(기대수익/위험):</b> ${fmt(r.riskReward || (profitPct && lossPct ? (profitPct/Math.abs(lossPct)) : null))}<br>
-      <b>수익률 평가 시점:</b> ${expectedHorizon(r.plan.ttlTradingDays)}
+      <b>수익률 평가 시점:</b> ${expectedHorizon(r.plan.ttlTradingDays)}<br>
+      <b>추천 근거:</b> ${recommendationWhy(r, 'return')}
     </div>
   `}).join('');
 
