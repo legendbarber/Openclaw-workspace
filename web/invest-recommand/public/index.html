@@ -19,13 +19,14 @@
 <body>
   <div class="wrap">
     <h1>🎯 Invest Recommand</h1>
-    <div class="muted">상위 5개 단일주식 추천 (합의+모멘텀+군중신호)</div>
+    <div class="muted">한국/미국 단일주식 추천 (위험대비 기대수익 + 절대 기대수익)</div>
     <button onclick="loadData()">새로 조회</button>
 
     <div id="meta" class="card"></div>
     <div id="notrade" class="card" style="display:none"></div>
     <div id="top" class="card"></div>
-    <div id="top5" class="row"></div>
+    <div id="riskAdjustedTop5" class="row"></div>
+    <div id="highReturnTop5" class="row"></div>
     <div id="breakdown" class="row"></div>
   </div>
 
@@ -82,7 +83,8 @@ async function loadData(){
   const x = d.topPick;
   if(!x){
     document.getElementById('top').innerHTML = '추천 후보 없음';
-    document.getElementById('top5').innerHTML = '';
+    document.getElementById('riskAdjustedTop5').innerHTML = '';
+    document.getElementById('highReturnTop5').innerHTML = '';
     document.getElementById('breakdown').innerHTML = '';
     return;
   }
@@ -111,8 +113,12 @@ async function loadData(){
     </div>
   `;
 
-  const top5 = (d.rankings || []).slice(0,5);
-  document.getElementById('top5').innerHTML = top5.map((r, idx) => {
+  const riskAdjustedTop5 = (d.riskAdjustedRankings || d.rankings || []).slice(0,5);
+  const highReturnTop5 = (d.highReturnRankings || d.rankings || []).slice(0,5);
+
+  document.getElementById('riskAdjustedTop5').innerHTML = `
+    <div class='card' style='grid-column:1/-1'><b>📌 위험대비 기대수익 상위 5</b></div>
+  ` + riskAdjustedTop5.map((r, idx) => {
     const lossPct = pctFrom(r.currentPrice, r.plan.stopLoss);
     const profitPct = pctFrom(r.currentPrice, r.plan.takeProfit1);
     return `
@@ -123,6 +129,25 @@ async function loadData(){
       진입: ${fmt(r.plan.entryZone[0])}~${fmt(r.plan.entryZone[1])}<br>
       손절: ${fmt(r.plan.stopLoss)} / 익절1: ${fmt(r.plan.takeProfit1)}<br>
       <b>예상 손실률:</b> ${fmtPct(lossPct)} / <b>예상 수익률:</b> ${fmtPct(profitPct)}<br>
+      <b>RR(기대수익/위험):</b> ${fmt(r.riskReward || (profitPct && lossPct ? (profitPct/Math.abs(lossPct)) : null))}<br>
+      <b>수익률 평가 시점:</b> ${expectedHorizon(r.plan.ttlTradingDays)}
+    </div>
+  `}).join('');
+
+  document.getElementById('highReturnTop5').innerHTML = `
+    <div class='card' style='grid-column:1/-1'><b>🚀 절대 기대수익 상위 5</b></div>
+  ` + highReturnTop5.map((r, idx) => {
+    const lossPct = pctFrom(r.currentPrice, r.plan.stopLoss);
+    const profitPct = pctFrom(r.currentPrice, r.plan.takeProfit1);
+    return `
+    <div class='card'>
+      <b>#${idx+1} ${r.symbol} (${r.name})</b><br>
+      점수: ${fmt(r.score)} / 현재가: ${fmt(r.currentPrice)}<br>
+      <b>설명:</b> ${productDesc(r.symbol, r.name, r.category)}<br>
+      진입: ${fmt(r.plan.entryZone[0])}~${fmt(r.plan.entryZone[1])}<br>
+      손절: ${fmt(r.plan.stopLoss)} / 익절1: ${fmt(r.plan.takeProfit1)}<br>
+      <b>예상 손실률:</b> ${fmtPct(lossPct)} / <b>예상 수익률:</b> ${fmtPct(profitPct)}<br>
+      <b>RR(기대수익/위험):</b> ${fmt(r.riskReward || (profitPct && lossPct ? (profitPct/Math.abs(lossPct)) : null))}<br>
       <b>수익률 평가 시점:</b> ${expectedHorizon(r.plan.ttlTradingDays)}
     </div>
   `}).join('');

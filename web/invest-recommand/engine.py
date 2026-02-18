@@ -22,21 +22,29 @@ class Asset:
 
 
 UNIVERSE = [
-    # 단일 주식 중심(상대적으로 모멘텀/변동성 높은 티커 우선)
-    Asset("NVDA", "NVIDIA Corp", "single-stock"),
-    Asset("TSLA", "Tesla Inc", "single-stock"),
-    Asset("AMD", "Advanced Micro Devices", "single-stock"),
-    Asset("PLTR", "Palantir Technologies", "single-stock"),
-    Asset("SMCI", "Super Micro Computer", "single-stock"),
-    Asset("META", "Meta Platforms", "single-stock"),
-    Asset("NFLX", "Netflix Inc", "single-stock"),
-    Asset("AMZN", "Amazon.com Inc", "single-stock"),
-    Asset("GOOGL", "Alphabet Inc", "single-stock"),
-    Asset("MSFT", "Microsoft Corp", "single-stock"),
-    Asset("COIN", "Coinbase Global", "single-stock"),
-    Asset("MSTR", "MicroStrategy", "single-stock"),
-    Asset("SOFI", "SoFi Technologies", "single-stock"),
-    Asset("RIVN", "Rivian Automotive", "single-stock"),
+    # US stocks
+    Asset("NVDA", "NVIDIA Corp", "us-stock"),
+    Asset("TSLA", "Tesla Inc", "us-stock"),
+    Asset("AMD", "Advanced Micro Devices", "us-stock"),
+    Asset("PLTR", "Palantir Technologies", "us-stock"),
+    Asset("SMCI", "Super Micro Computer", "us-stock"),
+    Asset("META", "Meta Platforms", "us-stock"),
+    Asset("NFLX", "Netflix Inc", "us-stock"),
+    Asset("AMZN", "Amazon.com Inc", "us-stock"),
+    Asset("COIN", "Coinbase Global", "us-stock"),
+    Asset("MSTR", "MicroStrategy", "us-stock"),
+
+    # KR stocks (Yahoo Finance suffix)
+    Asset("005930.KS", "Samsung Electronics", "kr-stock"),
+    Asset("000660.KS", "SK hynix", "kr-stock"),
+    Asset("035420.KS", "NAVER", "kr-stock"),
+    Asset("035720.KS", "Kakao", "kr-stock"),
+    Asset("068270.KS", "Celltrion", "kr-stock"),
+    Asset("207940.KS", "Samsung Biologics", "kr-stock"),
+    Asset("051910.KS", "LG Chem", "kr-stock"),
+    Asset("105560.KS", "KB Financial", "kr-stock"),
+    Asset("012330.KS", "Hyundai Motor", "kr-stock"),
+    Asset("034020.KS", "Doosan Enerbility", "kr-stock"),
 ]
 
 STATE_PATH = Path(__file__).resolve().parent / "state_log.json"
@@ -222,12 +230,21 @@ def evaluate_asset(asset: Asset) -> Dict | None:
 
     invalidation = "종가가 20일선 하회 + 거래강도 둔화가 2거래일 연속이면 추천 무효"
 
+    expected_loss_pct = (stop / cur - 1) * 100
+    expected_return1_pct = (tp1 / cur - 1) * 100
+    expected_return2_pct = (tp2 / cur - 1) * 100
+    rr_ratio = expected_return1_pct / abs(expected_loss_pct) if expected_loss_pct < 0 else 0.0
+
     return {
         "symbol": asset.symbol,
         "name": asset.name,
         "category": asset.category,
         "score": round(float(score), 2),
         "currentPrice": round(cur, 2),
+        "expectedLossPct": round(float(expected_loss_pct), 2),
+        "expectedReturnPct": round(float(expected_return1_pct), 2),
+        "expectedReturn2Pct": round(float(expected_return2_pct), 2),
+        "riskReward": round(float(rr_ratio), 2),
         "components": {
             "reportConsensus": report_consensus,
             "momentum": momentum,
@@ -262,24 +279,49 @@ def build_report() -> Dict:
             rows.append(r)
 
     rows.sort(key=lambda x: x["score"], reverse=True)
-    top = rows[0] if rows else None
+
+    # 위험대비 기대수익(리스크/리워드) 우선 랭킹
+    risk_adjusted = sorted(
+        rows,
+        key=lambda x: (
+            x.get("riskReward", 0),
+            x.get("expectedReturnPct", 0),
+            x.get("score", 0),
+        ),
+        reverse=True,
+    )
+
+    # 절대 기대수익(1차 익절 기준) 우선 랭킹
+    high_return = sorted(
+        rows,
+        key=lambda x: (
+            x.get("expectedReturnPct", 0),
+            x.get("riskReward", 0),
+            x.get("score", 0),
+        ),
+        reverse=True,
+    )
+
+    top = risk_adjusted[0] if risk_adjusted else None
 
     no_trade = False
     no_trade_reason = None
     if top:
-        if top["score"] < 62:
+        if top["score"] < 58:
             no_trade = True
-            no_trade_reason = "종합점수가 기준치(62) 미만이라 오늘은 관망 권장"
-        if top["components"]["risk"]["volPct"] > 55:
+            no_trade_reason = "종합점수가 기준치(58) 미만이라 오늘은 관망 권장"
+        if top["components"]["risk"]["volPct"] > 65:
             no_trade = True
             no_trade_reason = "변동성 과열(초고변동) 구간으로 진입 보류 권장"
 
     report = {
         "generatedAt": datetime.now(UTC).isoformat().replace("+00:00", "Z"),
-        "model": "Single-Stock Consensus Momentum v2",
-        "methodology": "S=0.35R+0.25M+0.20C+0.10L+0.10V",
+        "model": "KR/US Single-Stock Dual Ranking v3",
+        "methodology": "S=0.35R+0.25M+0.20C+0.10L+0.10V + Dual Rank(RR/Return)",
         "topPick": top,
         "rankings": rows,
+        "riskAdjustedRankings": risk_adjusted,
+        "highReturnRankings": high_return,
         "noTrade": no_trade,
         "noTradeReason": no_trade_reason,
         "failed": failed,
