@@ -18,9 +18,13 @@
     .cal-day.active{outline:2px solid #2563eb}
     .dot{width:7px;height:7px;border-radius:50%;background:#22c55e;position:absolute;right:6px;bottom:6px}
     .tiny{font-size:12px;color:#9ca3af}
+    .top-loader{position:fixed;top:0;left:0;right:0;height:3px;background:transparent;z-index:9999;overflow:hidden;display:none}
+    .top-loader .bar{position:absolute;height:100%;width:28%;background:#60a5fa;animation:slide 1.1s linear infinite;border-radius:999px}
+    @keyframes slide{0%{left:-30%}100%{left:100%}}
   </style>
 </head>
 <body>
+  <div id="topLoader" class="top-loader"><div class="bar"></div></div>
   <div class="wrap">
     <h1>🗂 투자 추천 히스토리</h1>
     <div class="card">월 단위 캘린더에서 기록된 날짜(●)를 눌러 당시 추천을 조회하세요. <a href="/invest-recommend">현재 추천으로 돌아가기</a></div>
@@ -41,7 +45,23 @@
 
 <script>
 function fmt(v,d=2){return (v===null||v===undefined)?'-':Number(v).toLocaleString(undefined,{maximumFractionDigits:d});}
+function setLoading(on){
+  const el=document.getElementById('topLoader');
+  if(!el) return;
+  el.style.display = on ? 'block' : 'none';
+}
+async function apiGet(url){
+  setLoading(true);
+  try{
+    const res = await fetch(url);
+    if(!res.ok) throw new Error('HTTP '+res.status);
+    return await res.json();
+  } finally {
+    setLoading(false);
+  }
+}
 function fmtPct(v,d=2){
+
   if(v===null||v===undefined||Number.isNaN(Number(v))) return '-';
   const n = Number(v);
   const sign = n>0?'+':'';
@@ -53,9 +73,9 @@ let calCursor = new Date();
 let selectedDate = null;
 
 async function loadSnapshots(){
-  const res = await fetch('/api/snapshots');
-  const data = await res.json();
-  snapshotDates = new Set((data.items||[]).map(x=>x.dateKST));
+  const ym = `${calCursor.getFullYear()}-${String(calCursor.getMonth()+1).padStart(2,'0')}`;
+  const data = await apiGet(`/api/snapshots/month/${ym}`);
+  snapshotDates = new Set(data.dates || []);
   renderCalendar();
 }
 
@@ -81,9 +101,9 @@ function renderCalendar(){
   document.getElementById('calGrid').innerHTML = cells.join('');
 }
 
-function moveMonth(delta){
+async function moveMonth(delta){
   calCursor = new Date(calCursor.getFullYear(), calCursor.getMonth()+delta, 1);
-  renderCalendar();
+  await loadSnapshots();
 }
 
 async function pickDate(ds){
@@ -96,24 +116,34 @@ async function pickDate(ds){
   }
 
   detail.innerHTML = `<b>${ds}</b><br>불러오는 중...`;
-  const res = await fetch(`/api/snapshots/${ds}`);
-  if(!res.ok){
-    detail.innerHTML = `<b>${ds}</b><br>기록을 불러오지 못했습니다.`;
-    return;
-  }
-  const s = await res.json();
-  const top = s.topPick || {};
-  const risk = (s.riskAdjustedTop5||[]).slice(0,5).map((x,i)=>`#${i+1} ${x.symbol} (${fmtPct(x.expectedReturnPct)} / RR ${fmt(x.riskReward)})`).join('<br>');
-  const ret = (s.highReturnTop5||[]).slice(0,5).map((x,i)=>`#${i+1} ${x.symbol} (${fmtPct(x.expectedReturnPct)})`).join('<br>');
+  try{
+    const s = await apiGet(`/api/snapshots/${ds}`);
+    const perf = await apiGet(`/api/snapshots/${ds}/performance`);
 
-  detail.innerHTML = `
-    <b>${ds} 저장 기록</b><br>
-    생성시각: ${new Date(s.generatedAt).toLocaleString()}<br><br>
-    <b>Top Pick</b><br>
-    ${top.symbol || '-'} (${top.name || '-'}) / 점수 ${fmt(top.score)} / 기대수익 ${fmtPct(top.expectedReturnPct)} / 손실 ${fmtPct(top.expectedLossPct)}<br><br>
-    <b>위험대비 기대수익 상위 5</b><br>${risk || '-'}<br><br>
-    <b>절대 기대수익 상위 5</b><br>${ret || '-'}
-  `;
+    const top = s.topPick || {};
+    const risk = (s.riskAdjustedTop5||[]).slice(0,5).map((x,i)=>`#${i+1} ${x.symbol} (${fmtPct(x.expectedReturnPct)} / RR ${fmt(x.riskReward)})`).join('<br>');
+    const ret = (s.highReturnTop5||[]).slice(0,5).map((x,i)=>`#${i+1} ${x.symbol} (${fmtPct(x.expectedReturnPct)})`).join('<br>');
+
+    const perfMap = new Map((perf.items||[]).map(x=>[x.symbol, x]));
+    const symbols = [...new Set([...(s.riskAdjustedTop5||[]).map(x=>x.symbol), ...(s.highReturnTop5||[]).map(x=>x.symbol)])];
+    const perfLines = symbols.map(sym=>{
+      const p = perfMap.get(sym);
+      if(!p) return `${sym}: 데이터 없음`;
+      return `${sym}: ${fmtPct(p.changePct)} (기준가 ${fmt(p.basePrice)} → 현재 ${fmt(p.currentPrice)})`;
+    }).join('<br>');
+
+    detail.innerHTML = `
+      <b>${ds} 저장 기록</b><br>
+      생성시각: ${new Date(s.generatedAt).toLocaleString()}<br><br>
+      <b>Top Pick</b><br>
+      ${top.symbol || '-'} (${top.name || '-'}) / 점수 ${fmt(top.score)} / 기대수익 ${fmtPct(top.expectedReturnPct)} / 손실 ${fmtPct(top.expectedLossPct)}<br><br>
+      <b>위험대비 기대수익 상위 5</b><br>${risk || '-'}<br><br>
+      <b>절대 기대수익 상위 5</b><br>${ret || '-'}<br><br>
+      <b>해당일 대비 현재 등락률</b><br>${perfLines || '-'}
+    `;
+  }catch(_){
+    detail.innerHTML = `<b>${ds}</b><br>기록을 불러오지 못했습니다.`;
+  }
 }
 
 loadSnapshots();

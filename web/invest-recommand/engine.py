@@ -428,3 +428,86 @@ def get_snapshot(date_kst: str) -> Dict | None:
         return json.loads(p.read_text(encoding="utf-8"))
     except Exception:
         return None
+
+
+def list_snapshot_dates_by_month(ym: str) -> List[str]:
+    """Return available snapshot dates for YYYY-MM."""
+    SNAPSHOT_DIR.mkdir(parents=True, exist_ok=True)
+    if not re.match(r"^\d{4}-\d{2}$", ym or ""):
+        return []
+    files = sorted(SNAPSHOT_DIR.glob(f"{ym}-*.json"))
+    return [p.stem for p in files]
+
+
+def get_current_change_vs_snapshot(date_kst: str) -> Dict:
+    """For snapshot symbols, compute change(%) from snapshot-date price to latest price."""
+    snap = get_snapshot(date_kst)
+    if not snap:
+        return {"error": "not_found", "dateKST": date_kst, "items": []}
+
+    # collect unique symbols from snapshot cards
+    seen = {}
+    for key in ["riskAdjustedTop5", "highReturnTop5"]:
+        for r in snap.get(key, []) or []:
+            sym = r.get("symbol")
+            base = r.get("currentPrice")
+            name = r.get("name")
+            if sym and isinstance(base, (int, float)) and base > 0 and sym not in seen:
+                seen[sym] = {"symbol": sym, "name": name, "basePrice": float(base)}
+
+    symbols = list(seen.keys())
+    if not symbols:
+        return {"dateKST": date_kst, "items": []}
+
+    latest_map: Dict[str, float] = {}
+
+    # try batch download first
+    try:
+        data = yf.download(symbols, period="5d", auto_adjust=True, progress=False, threads=True)
+        if data is not None and not data.empty:
+            if isinstance(data.columns, pd.MultiIndex):
+                close = data.get("Close")
+                if close is not None:
+                    for sym in symbols:
+                        try:
+                            s = close[sym].dropna()
+                            if len(s) > 0:
+                                latest_map[sym] = float(s.iloc[-1])
+                        except Exception:
+                            pass
+            elif "Close" in data:
+                s = data["Close"].dropna()
+                if len(s) > 0 and len(symbols) == 1:
+                    latest_map[symbols[0]] = float(s.iloc[-1])
+    except Exception:
+        pass
+
+    # fallback per symbol
+    for sym in symbols:
+        if sym in latest_map:
+            continue
+        try:
+            s = _download_close(sym, "1mo")
+            if s is not None and len(s) > 0:
+                latest_map[sym] = float(s.iloc[-1])
+        except Exception:
+            pass
+
+    items = []
+    for sym in symbols:
+        base = seen[sym]["basePrice"]
+        cur = latest_map.get(sym)
+        chg = None if cur is None else ((cur / base) - 1) * 100
+        items.append({
+            "symbol": sym,
+            "name": seen[sym]["name"],
+            "basePrice": round(base, 4),
+            "currentPrice": None if cur is None else round(float(cur), 4),
+            "changePct": None if chg is None else round(float(chg), 2),
+        })
+
+    return {
+        "dateKST": date_kst,
+        "generatedAt": datetime.now(UTC).isoformat().replace("+00:00", "Z"),
+        "items": items,
+    }

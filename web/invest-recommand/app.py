@@ -1,5 +1,12 @@
 from flask import Flask, jsonify, send_from_directory, redirect
-from engine import build_report, save_daily_snapshot, list_snapshots, get_snapshot
+from engine import (
+    build_report,
+    save_daily_snapshot,
+    list_snapshots,
+    get_snapshot,
+    list_snapshot_dates_by_month,
+    get_current_change_vs_snapshot,
+)
 import threading
 import time
 from datetime import datetime
@@ -7,6 +14,10 @@ from zoneinfo import ZoneInfo
 
 app = Flask(__name__, static_folder="public")
 KST = ZoneInfo("Asia/Seoul")
+
+# lightweight in-memory cache for faster UI response
+_REPORT_CACHE = {"ts": 0.0, "data": None}
+_REPORT_TTL_SEC = 60
 
 
 def _snapshot_worker():
@@ -29,7 +40,14 @@ threading.Thread(target=_snapshot_worker, daemon=True).start()
 
 @app.get('/api/report')
 def api_report():
-    return jsonify(build_report())
+    now = time.time()
+    if _REPORT_CACHE["data"] is not None and (now - _REPORT_CACHE["ts"] <= _REPORT_TTL_SEC):
+        return jsonify(_REPORT_CACHE["data"])
+
+    data = build_report()
+    _REPORT_CACHE["data"] = data
+    _REPORT_CACHE["ts"] = now
+    return jsonify(data)
 
 
 @app.get('/api/snapshot/save')
@@ -47,11 +65,24 @@ def api_snapshots():
     return jsonify({"items": list_snapshots(limit=365)})
 
 
+@app.get('/api/snapshots/month/<ym>')
+def api_snapshots_by_month(ym: str):
+    return jsonify({"month": ym, "dates": list_snapshot_dates_by_month(ym)})
+
+
 @app.get('/api/snapshots/<date_kst>')
 def api_snapshot_by_date(date_kst: str):
     data = get_snapshot(date_kst)
     if not data:
         return jsonify({"error": "not_found", "dateKST": date_kst}), 404
+    return jsonify(data)
+
+
+@app.get('/api/snapshots/<date_kst>/performance')
+def api_snapshot_performance(date_kst: str):
+    data = get_current_change_vs_snapshot(date_kst)
+    if data.get("error") == "not_found":
+        return jsonify(data), 404
     return jsonify(data)
 
 
