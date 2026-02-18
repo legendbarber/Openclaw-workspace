@@ -22,18 +22,21 @@ class Asset:
 
 
 UNIVERSE = [
-    Asset("QQQ", "Nasdaq 100 ETF", "equity"),
-    Asset("SPY", "S&P 500 ETF", "equity"),
-    Asset("EEM", "Emerging Markets ETF", "equity"),
-    Asset("EFA", "Developed Markets ETF", "equity"),
-    Asset("VNQ", "US REIT ETF", "reit"),
-    Asset("TLT", "20Y Treasury ETF", "bond"),
-    Asset("IEF", "7-10Y Treasury ETF", "bond"),
-    Asset("LQD", "IG Corporate Bond ETF", "bond"),
-    Asset("GLD", "Gold ETF", "metal"),
-    Asset("SLV", "Silver ETF", "metal"),
-    Asset("USO", "Crude Oil ETF", "commodity"),
-    Asset("DBC", "Commodity Basket ETF", "commodity"),
+    # 단일 주식 중심(상대적으로 모멘텀/변동성 높은 티커 우선)
+    Asset("NVDA", "NVIDIA Corp", "single-stock"),
+    Asset("TSLA", "Tesla Inc", "single-stock"),
+    Asset("AMD", "Advanced Micro Devices", "single-stock"),
+    Asset("PLTR", "Palantir Technologies", "single-stock"),
+    Asset("SMCI", "Super Micro Computer", "single-stock"),
+    Asset("META", "Meta Platforms", "single-stock"),
+    Asset("NFLX", "Netflix Inc", "single-stock"),
+    Asset("AMZN", "Amazon.com Inc", "single-stock"),
+    Asset("GOOGL", "Alphabet Inc", "single-stock"),
+    Asset("MSFT", "Microsoft Corp", "single-stock"),
+    Asset("COIN", "Coinbase Global", "single-stock"),
+    Asset("MSTR", "MicroStrategy", "single-stock"),
+    Asset("SOFI", "SoFi Technologies", "single-stock"),
+    Asset("RIVN", "Rivian Automotive", "single-stock"),
 ]
 
 STATE_PATH = Path(__file__).resolve().parent / "state_log.json"
@@ -178,8 +181,17 @@ def _liquidity_score(symbol: str) -> float:
 def _risk_score(s: pd.Series) -> Dict:
     v = _vol(s) * 100
     dd = abs(_mdd(s)) * 100
-    # 낮은 변동성/낙폭에 높은 점수
-    score = float(np.clip(100 - max(0, v - 12) * 2.5 - max(0, dd - 10) * 1.8, 0, 100))
+    # 단일주식 모드: 너무 낮은 변동성은 감점, 중간~중상 변동성 선호, 과열은 감점
+    # vol sweet spot: 22%~45%
+    if v < 22:
+        vol_component = 45 + (v / 22) * 25  # 45~70
+    elif v <= 45:
+        vol_component = 70 + ((v - 22) / 23) * 25  # 70~95
+    else:
+        vol_component = max(20, 95 - (v - 45) * 2.2)
+
+    dd_penalty = max(0, dd - 38) * 1.6
+    score = float(np.clip(vol_component - dd_penalty, 0, 100))
     return {"volPct": round(v, 2), "maxDrawdownPct": round(dd, 2), "score": round(score, 2)}
 
 
@@ -258,13 +270,13 @@ def build_report() -> Dict:
         if top["score"] < 62:
             no_trade = True
             no_trade_reason = "종합점수가 기준치(62) 미만이라 오늘은 관망 권장"
-        if top["components"]["risk"]["volPct"] > 35:
+        if top["components"]["risk"]["volPct"] > 55:
             no_trade = True
-            no_trade_reason = "변동성 과열 구간으로 진입 보류 권장"
+            no_trade_reason = "변동성 과열(초고변동) 구간으로 진입 보류 권장"
 
     report = {
         "generatedAt": datetime.now(UTC).isoformat().replace("+00:00", "Z"),
-        "model": "Single-Pick Consensus Momentum v1",
+        "model": "Single-Stock Consensus Momentum v2",
         "methodology": "S=0.35R+0.25M+0.20C+0.10L+0.10V",
         "topPick": top,
         "rankings": rows,
