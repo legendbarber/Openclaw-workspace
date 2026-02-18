@@ -101,6 +101,17 @@ def invest_history_root_assets(filename):
     return send_from_directory(f"{app.static_folder}/invest-history", filename)
 
 
+# 짧은 URL 별칭: /calendar
+@app.get('/calendar')
+def invest_calendar_page():
+    return send_from_directory(f"{app.static_folder}/invest-history", 'index.html')
+
+
+@app.get('/calendar/<path:filename>')
+def invest_calendar_assets(filename):
+    return send_from_directory(f"{app.static_folder}/invest-history", filename)
+
+
 # backward compatibility
 @app.get('/invest-recommand')
 def invest_recommand_alias():
