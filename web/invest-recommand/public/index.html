@@ -31,6 +31,27 @@
 
 <script>
 function fmt(v,d=2){return (v===null||v===undefined)?'-':Number(v).toLocaleString(undefined,{maximumFractionDigits:d});}
+function pctFrom(base, target){
+  if(base===null||base===undefined||target===null||target===undefined||Number(base)===0) return null;
+  return ((Number(target)-Number(base))/Number(base))*100;
+}
+function fmtPct(v,d=2){
+  if(v===null||v===undefined||Number.isNaN(Number(v))) return '-';
+  const n = Number(v);
+  const sign = n>0?'+':'';
+  return `${sign}${n.toLocaleString(undefined,{maximumFractionDigits:d})}%`;
+}
+function productDesc(symbol,name,category){
+  const s = String(symbol||'').toUpperCase();
+  const dict = {
+    EEM:'신흥국(중국·인도·대만·브라질 등) 대형주에 분산 투자하는 ETF',
+    EFA:'미국 제외 선진국(유럽·일본 등) 주식에 분산 투자하는 ETF',
+    LQD:'미국 투자등급 회사채에 투자하는 ETF (상대적으로 방어적 성격)',
+    VNQ:'미국 상장 리츠(REITs)에 투자하는 부동산 ETF',
+    TLT:'미국 20년 이상 장기국채에 투자하는 ETF (금리 민감도 높음)'
+  };
+  return dict[s] || `${category||'자산'} 카테고리의 ${name||symbol||'투자상품'}`;
+}
 
 async function loadData(){
   const res = await fetch('/api/report');
@@ -59,14 +80,20 @@ async function loadData(){
     return;
   }
 
+  const topLossPct = pctFrom(x.currentPrice, x.plan.stopLoss);
+  const topProfit1Pct = pctFrom(x.currentPrice, x.plan.takeProfit1);
+  const topProfit2Pct = pctFrom(x.currentPrice, x.plan.takeProfit2);
+
   document.getElementById('top').innerHTML = `
     <div class='big'>Top Pick: ${x.symbol} (${x.name})</div>
     <div>카테고리: ${x.category} / 종합점수: <b>${fmt(x.score)}</b></div>
     <div>현재가: ${fmt(x.currentPrice)}</div>
+    <div><b>상품 설명:</b> ${productDesc(x.symbol, x.name, x.category)}</div>
     <hr>
     <div><b>운용 계획</b></div>
     <div>진입가: ${fmt(x.plan.entryZone[0])} ~ ${fmt(x.plan.entryZone[1])}</div>
     <div>손절가: ${fmt(x.plan.stopLoss)} / 1차 익절: ${fmt(x.plan.takeProfit1)} / 2차 익절: ${fmt(x.plan.takeProfit2)}</div>
+    <div><b>예상 손실률:</b> ${fmtPct(topLossPct)} / <b>예상 수익률:</b> 1차 ${fmtPct(topProfit1Pct)} · 2차 ${fmtPct(topProfit2Pct)}</div>
     <div>유효기간: ${x.plan.ttlTradingDays}거래일</div>
     <div>무효화 조건: ${x.plan.invalidationRule}</div>
     <div style='margin-top:8px'>
@@ -77,14 +104,19 @@ async function loadData(){
   `;
 
   const top5 = (d.rankings || []).slice(0,5);
-  document.getElementById('top5').innerHTML = top5.map((r, idx) => `
+  document.getElementById('top5').innerHTML = top5.map((r, idx) => {
+    const lossPct = pctFrom(r.currentPrice, r.plan.stopLoss);
+    const profitPct = pctFrom(r.currentPrice, r.plan.takeProfit1);
+    return `
     <div class='card'>
       <b>#${idx+1} ${r.symbol} (${r.name})</b><br>
       점수: ${fmt(r.score)} / 현재가: ${fmt(r.currentPrice)}<br>
+      <b>설명:</b> ${productDesc(r.symbol, r.name, r.category)}<br>
       진입: ${fmt(r.plan.entryZone[0])}~${fmt(r.plan.entryZone[1])}<br>
-      손절: ${fmt(r.plan.stopLoss)} / 익절1: ${fmt(r.plan.takeProfit1)}
+      손절: ${fmt(r.plan.stopLoss)} / 익절1: ${fmt(r.plan.takeProfit1)}<br>
+      <b>예상 손실률:</b> ${fmtPct(lossPct)} / <b>예상 수익률:</b> ${fmtPct(profitPct)}
     </div>
-  `).join('');
+  `}).join('');
 
   const c = x.components;
   document.getElementById('breakdown').innerHTML = `
