@@ -121,16 +121,21 @@ async function pickDate(ds){
     const perf = await apiGet(`/api/snapshots/${ds}/performance`);
 
     const top = s.topPick || {};
-    const risk = (s.riskAdjustedTop5||[]).slice(0,5).map((x,i)=>`#${i+1} ${x.symbol} (${fmtPct(x.expectedReturnPct)} / RR ${fmt(x.riskReward)})`).join('<br>');
-    const ret = (s.highReturnTop5||[]).slice(0,5).map((x,i)=>`#${i+1} ${x.symbol} (${fmtPct(x.expectedReturnPct)})`).join('<br>');
-
     const perfMap = new Map((perf.items||[]).map(x=>[x.symbol, x]));
-    const symbols = [...new Set([...(s.riskAdjustedTop5||[]).map(x=>x.symbol), ...(s.highReturnTop5||[]).map(x=>x.symbol)])];
-    const perfLines = symbols.map(sym=>{
-      const p = perfMap.get(sym);
-      if(!p) return `${sym}: 데이터 없음`;
-      return `${sym}: ${fmtPct(p.changePct)} (기준가 ${fmt(p.basePrice)} → 현재 ${fmt(p.currentPrice)})`;
-    }).join('<br>');
+
+    const withPerf = (x)=>{
+      const p = perfMap.get(x.symbol);
+      if(!p) return '현재가/등락 데이터 없음';
+      return `현재 ${fmt(p.currentPrice)} / 해당일 대비 ${fmtPct(p.changePct)}`;
+    };
+
+    const risk = (s.riskAdjustedTop5||[]).slice(0,5)
+      .map((x,i)=>`#${i+1} ${x.symbol} (${fmtPct(x.expectedReturnPct)} / RR ${fmt(x.riskReward)}) · ${withPerf(x)}`)
+      .join('<br>');
+
+    const ret = (s.highReturnTop5||[]).slice(0,5)
+      .map((x,i)=>`#${i+1} ${x.symbol} (${fmtPct(x.expectedReturnPct)}) · ${withPerf(x)}`)
+      .join('<br>');
 
     detail.innerHTML = `
       <b>${ds} 저장 기록</b><br>
@@ -138,8 +143,7 @@ async function pickDate(ds){
       <b>Top Pick</b><br>
       ${top.symbol || '-'} (${top.name || '-'}) / 점수 ${fmt(top.score)} / 기대수익 ${fmtPct(top.expectedReturnPct)} / 손실 ${fmtPct(top.expectedLossPct)}<br><br>
       <b>위험대비 기대수익 상위 5</b><br>${risk || '-'}<br><br>
-      <b>절대 기대수익 상위 5</b><br>${ret || '-'}<br><br>
-      <b>해당일 대비 현재 등락률</b><br>${perfLines || '-'}
+      <b>절대 기대수익 상위 5</b><br>${ret || '-'}
     `;
   }catch(_){
     detail.innerHTML = `<b>${ds}</b><br>기록을 불러오지 못했습니다.`;
