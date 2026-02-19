@@ -185,6 +185,11 @@ def _proxy_to_tema_v2(subpath: str = ""):
                 if '<head>' in text and 'base href="/tema-web-v2/"' not in text:
                     text = text.replace('<head>', '<head><base href="/tema-web-v2/">', 1)
                 out = Response(text, status=resp.status, content_type=content_type)
+
+            # tema-web-v2는 캐시 고정으로 인한 갱신 문제를 피하기 위해 no-store 강제
+            out.headers["Cache-Control"] = "no-store, no-cache, must-revalidate, max-age=0"
+            out.headers["Pragma"] = "no-cache"
+            out.headers["Expires"] = "0"
             return out
     except urllib.error.HTTPError as e:
         return Response(e.read(), status=e.code, content_type=e.headers.get("Content-Type", "text/plain"))
