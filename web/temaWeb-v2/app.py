@@ -19,7 +19,7 @@ from fastapi.middleware.gzip import GZipMiddleware
 
 TEMA_ROOT = Path(os.environ.get("TEMA_ROOT", r"C:\project\04.app\temaWeb\tema"))
 
-ENABLE_REFRESH_RAW = os.environ.get("ENABLE_REFRESH", "false")
+ENABLE_REFRESH_RAW = os.environ.get("ENABLE_REFRESH", "true")
 ENABLE_REFRESH = ENABLE_REFRESH_RAW.strip().lower() in ("1", "true", "yes", "y", "on")
 REFRESH_TOKEN = os.environ.get("REFRESH_TOKEN", "")
 
