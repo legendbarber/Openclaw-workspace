@@ -179,6 +179,11 @@ def theme_leaders_page_by_date(date: str):
     return send_from_directory(app.static_folder, 'theme-leaders.html')
 
 
+@app.get('/theme-leaders/calendar')
+def theme_leaders_calendar_page():
+    return send_from_directory(app.static_folder, 'theme-leaders-calendar.html')
+
+
 # invest-recommend 하위 캘린더 경로
 @app.get('/invest-recommend/calendar')
 def invest_calendar_page_nested():

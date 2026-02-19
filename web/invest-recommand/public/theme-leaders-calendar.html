@@ -1,0 +1,97 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>주도테마 기록 캘린더</title>
+  <style>
+    body{margin:0;background:#0b1220;color:#e5e7eb;font-family:Arial,sans-serif}
+    .wrap{max-width:980px;margin:0 auto;padding:20px}
+    .card{background:#111827;border:1px solid #1f2937;border-radius:14px;padding:14px;margin-top:12px}
+    .head{display:flex;justify-content:space-between;align-items:center;gap:8px}
+    .grid{display:grid;grid-template-columns:repeat(7,1fr);gap:8px;margin-top:10px}
+    .dow,.day{font-size:12px;text-align:center}
+    .dow{color:#9ca3af}
+    .day{padding:10px 4px;border:1px solid #1f2937;border-radius:8px;background:#0f172a;cursor:pointer}
+    .day.empty{opacity:.3;cursor:default}
+    .day.has{outline:2px solid #2563eb}
+    .day.today{border-color:#22c55e}
+    button{background:#2563eb;border:0;color:#fff;padding:8px 10px;border-radius:8px;cursor:pointer}
+    a{color:#93c5fd}
+    .list a{display:block;padding:6px 0}
+  </style>
+</head>
+<body>
+<div class="wrap">
+  <h1>🗓️ 주도테마/주도주 기록 캘린더</h1>
+  <div><a href="/theme-leaders">실시간 페이지</a></div>
+  <div class="card">
+    <div class="head">
+      <button id="prev">◀</button>
+      <b id="ym"></b>
+      <button id="next">▶</button>
+    </div>
+    <div class="grid" id="cal"></div>
+  </div>
+  <div class="card list">
+    <b>기록된 날짜 목록</b>
+    <div id="dates"></div>
+  </div>
+</div>
+<script>
+let snapshotDates = new Set();
+let cur = new Date();
+
+function yymmdd(d){
+  const yy = String(d.getFullYear()).slice(2);
+  const mm = String(d.getMonth()+1).padStart(2,'0');
+  const dd = String(d.getDate()).padStart(2,'0');
+  return `${yy}${mm}${dd}`;
+}
+
+function openDate(yyMMdd){ location.href = `/theme-leaders/${yyMMdd}`; }
+
+function render(){
+  const y = cur.getFullYear();
+  const m = cur.getMonth();
+  document.getElementById('ym').textContent = `${y}-${String(m+1).padStart(2,'0')}`;
+
+  const cal = document.getElementById('cal');
+  cal.innerHTML = ['일','월','화','수','목','금','토'].map(d=>`<div class='dow'>${d}</div>`).join('');
+
+  const first = new Date(y,m,1);
+  const start = first.getDay();
+  const lastDate = new Date(y,m+1,0).getDate();
+
+  for(let i=0;i<start;i++) cal.innerHTML += `<div class='day empty'></div>`;
+
+  const todayKey = yymmdd(new Date());
+  for(let d=1; d<=lastDate; d++){
+    const dt = new Date(y,m,d);
+    const key = yymmdd(dt);
+    const has = snapshotDates.has(key);
+    const isToday = key===todayKey;
+    const cls = `day ${has?'has':''} ${isToday?'today':''}`;
+    cal.innerHTML += `<div class='${cls}' onclick="${has?`openDate('${key}')`:''}">${d}${has?'<br>●':''}</div>`;
+  }
+}
+
+async function init(){
+  const r = await fetch(`/api/theme-leaders/snapshots?limit=365&t=${Date.now()}`, {cache:'no-store'});
+  const j = await r.json();
+  const items = j.items || [];
+  snapshotDates = new Set(items.map(x=>x.date));
+
+  document.getElementById('dates').innerHTML = items.length
+    ? items.map(x=>`<a href='/theme-leaders/${x.date}'>${x.date} - ${x.topTheme||'-'}</a>`).join('')
+    : '기록 없음';
+
+  render();
+}
+
+document.getElementById('prev').onclick = ()=>{ cur = new Date(cur.getFullYear(), cur.getMonth()-1, 1); render(); };
+document.getElementById('next').onclick = ()=>{ cur = new Date(cur.getFullYear(), cur.getMonth()+1, 1); render(); };
+init();
+</script>
+</body>
+</html>
