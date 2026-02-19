@@ -1,0 +1,50 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Theme Now</title>
+  <style>
+    body{font-family:Arial,sans-serif;background:#0b1020;color:#eef2ff;margin:0;padding:20px}
+    h1{margin:0 0 8px} .sub{opacity:.8;margin-bottom:16px}
+    .grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:12px}
+    .card{background:#121933;border:1px solid #2a355f;border-radius:12px;padding:12px}
+    .score{font-size:22px;font-weight:700;color:#7dd3fc}
+    table{width:100%;border-collapse:collapse;margin-top:8px;font-size:14px}
+    th,td{padding:6px;border-bottom:1px solid #29335f;text-align:left}
+  </style>
+</head>
+<body>
+  <h1>현시점 테마/종목 스코어보드</h1>
+  <div class="sub" id="meta">로딩 중...</div>
+
+  <div class="card" id="top"></div>
+  <br/>
+  <div class="grid" id="themes"></div>
+
+<script>
+async function load(){
+  const r = await fetch('/theme-now.json?_=' + Date.now());
+  const d = await r.json();
+  document.getElementById('meta').textContent = `${d.generatedAt} | 로직: ${d.method}`;
+
+  const top = d.topPicks.map(x=>`<tr><td>${x.theme}</td><td>${x.symbol}</td><td>${x.score}</td><td>${x.m1}%</td><td>${x.m3}%</td></tr>`).join('');
+  document.getElementById('top').innerHTML = `
+    <h3>Top Picks</h3>
+    <table><thead><tr><th>테마</th><th>종목</th><th>점수</th><th>1M</th><th>3M</th></tr></thead><tbody>${top}</tbody></table>
+    <div style="margin-top:8px;opacity:.7">${d.note}</div>
+  `;
+
+  document.getElementById('themes').innerHTML = d.themes.map(t=>{
+    const leaders = t.leaders.map(m=>`<tr><td>${m.symbol}</td><td>${m.score}</td><td>${m.m1}%</td><td>${m.m3}%</td></tr>`).join('');
+    return `<div class="card">
+      <div><b>${t.theme}</b> <span style="opacity:.7">(${t.proxy})</span></div>
+      <div class="score">${t.themeScore}</div>
+      <table><thead><tr><th>리더</th><th>점수</th><th>1M</th><th>3M</th></tr></thead><tbody>${leaders}</tbody></table>
+    </div>`;
+  }).join('');
+}
+load();
+</script>
+</body>
+</html>

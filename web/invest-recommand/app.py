@@ -184,6 +184,11 @@ def theme_leaders_calendar_page():
     return send_from_directory(app.static_folder, 'theme-leaders-calendar.html')
 
 
+@app.get('/theme-now')
+def theme_now_page():
+    return send_from_directory(app.static_folder, 'theme-now.html')
+
+
 # invest-recommend 하위 캘린더 경로
 @app.get('/invest-recommend/calendar')
 def invest_calendar_page_nested():
