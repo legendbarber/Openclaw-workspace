@@ -13,6 +13,7 @@ from theme_leader import (
     get_theme_leader_snapshot,
     list_theme_leader_snapshots,
 )
+from theme_logic_kr import save_kr_theme_report
 import threading
 import time
 from datetime import datetime
@@ -142,6 +143,7 @@ def home():
         <li><a style='color:#93c5fd' href='/invest-history'>/invest-history</a> (추천 히스토리 캘린더)</li>
         <li><a style='color:#93c5fd' href='/tema-web-v2'>/tema-web-v2</a> (테마주 업그레이드 v2)</li>
         <li><a style='color:#93c5fd' href='/theme-leaders'>/theme-leaders</a> (당일 주도테마/주도주 탐색)</li>
+        <li><a style='color:#93c5fd' href='/theme-now-kr'>/theme-now-kr</a> (한국주식 테마 실시간 스코어보드)</li>
         <li><a style='color:#93c5fd' href='/game-demo'>/game-demo</a> (스와이프 게임 데모 v1)</li>
         <li><a style='color:#93c5fd' href='/game-demo-v2'>/game-demo-v2</a> (퍼즐 머지 데모 v2)</li>
         <li><a style='color:#93c5fd' href='/game-foldlight'>/game-foldlight</a> (독창 퍼즐 Foldlight 프로토)</li>
@@ -187,6 +189,20 @@ def theme_leaders_calendar_page():
 @app.get('/theme-now')
 def theme_now_page():
     return send_from_directory(app.static_folder, 'theme-now.html')
+
+
+@app.get('/theme-now-kr')
+def theme_now_kr_page():
+    return send_from_directory(app.static_folder, 'theme-now-kr.html')
+
+
+@app.get('/api/theme-now-kr/refresh')
+def api_theme_now_kr_refresh():
+    try:
+        data = save_kr_theme_report()
+        return jsonify({"ok": True, "generatedAt": data.get("generatedAt")})
+    except Exception as e:
+        return jsonify({"ok": False, "message": str(e)}), 500
 
 
 # invest-recommend 하위 캘린더 경로
