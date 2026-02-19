@@ -7,6 +7,7 @@ from engine import (
     list_snapshot_dates_by_month,
     get_current_change_vs_snapshot,
 )
+from theme_leader import build_theme_leader_report
 import threading
 import time
 from datetime import datetime
@@ -90,6 +91,16 @@ def api_snapshot_performance(date_kst: str):
     return jsonify(data)
 
 
+@app.get('/api/theme-leaders')
+def api_theme_leaders():
+    limit = request.args.get('limit', default=12, type=int) or 12
+    pick = request.args.get('pick', default=2, type=int) or 2
+    try:
+        return jsonify(build_theme_leader_report(limit_themes=max(3, min(limit, 30)), per_theme_pick=max(1, min(pick, 5))))
+    except Exception as e:
+        return jsonify({"error": "theme_leader_unavailable", "message": str(e)}), 502
+
+
 @app.get('/')
 def home():
     return """
@@ -100,6 +111,7 @@ def home():
         <li><a style='color:#93c5fd' href='/invest-recommend'>/invest-recommend</a> (투자 추천)</li>
         <li><a style='color:#93c5fd' href='/invest-history'>/invest-history</a> (추천 히스토리 캘린더)</li>
         <li><a style='color:#93c5fd' href='/tema-web-v2'>/tema-web-v2</a> (테마주 업그레이드 v2)</li>
+        <li><a style='color:#93c5fd' href='/theme-leaders'>/theme-leaders</a> (당일 주도테마/주도주 탐색)</li>
         <li><a style='color:#93c5fd' href='/game-demo'>/game-demo</a> (스와이프 게임 데모 v1)</li>
         <li><a style='color:#93c5fd' href='/game-demo-v2'>/game-demo-v2</a> (퍼즐 머지 데모 v2)</li>
         <li><a style='color:#93c5fd' href='/game-foldlight'>/game-foldlight</a> (독창 퍼즐 Foldlight 프로토)</li>
@@ -124,6 +136,11 @@ def invest_history_page():
 @app.get('/invest-recommend/history/<path:filename>')
 def invest_history_assets(filename):
     return send_from_directory(f"{app.static_folder}/invest-history", filename)
+
+
+@app.get('/theme-leaders')
+def theme_leaders_page():
+    return send_from_directory(app.static_folder, 'theme-leaders.html')
 
 
 # invest-recommend 하위 캘린더 경로

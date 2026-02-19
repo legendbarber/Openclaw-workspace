@@ -1,0 +1,69 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>당일 주도테마/주도주</title>
+  <style>
+    body{margin:0;background:#0b1220;color:#e5e7eb;font-family:Arial,sans-serif}
+    .wrap{max-width:1100px;margin:0 auto;padding:20px}
+    .card{background:#111827;border:1px solid #1f2937;border-radius:14px;padding:14px;margin-top:12px}
+    .row{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+    @media(max-width:900px){.row{grid-template-columns:1fr}}
+    .muted{color:#9ca3af}
+    button{background:#2563eb;border:0;color:#fff;padding:8px 12px;border-radius:8px;cursor:pointer}
+    a{color:#93c5fd}
+    .pill{display:inline-block;border:1px solid #374151;border-radius:999px;padding:3px 8px;font-size:12px;margin-right:6px}
+  </style>
+</head>
+<body>
+<div class="wrap">
+  <h1>🔥 당일 주도테마 · 주도주</h1>
+  <div class="muted">테마 강도 + 테마 내 주도주 점수로 당일 흐름을 빠르게 확인</div>
+  <button onclick="load()">새로 계산</button>
+  <div id="meta" class="card"></div>
+  <div id="themes" class="row"></div>
+  <div id="leaders" class="card"></div>
+</div>
+<script>
+const fmt=(v,d=2)=> (v===null||v===undefined)?'-':Number(v).toLocaleString(undefined,{maximumFractionDigits:d});
+const pct=v=>`${v>0?'+':''}${fmt(v,2)}%`;
+
+async function load(){
+  const r = await fetch(`/api/theme-leaders?limit=12&pick=2&t=${Date.now()}`, {cache:'no-store'});
+  const d = await r.json();
+  if(!r.ok){
+    document.getElementById('meta').innerHTML = `<b>오류:</b> ${d.message||d.error||'unknown'}`;
+    return;
+  }
+
+  document.getElementById('meta').innerHTML = `
+    <b>기준일:</b> ${d.date || '-'}<br>
+    <b>생성시각:</b> ${new Date(d.generatedAt).toLocaleString()}<br>
+    <b>로직:</b> ${d.methodology}
+  `;
+
+  const topThemes = (d.themes||[]).slice(0,8);
+  document.getElementById('themes').innerHTML = topThemes.map((t,idx)=>{
+    const l = t.leaders?.[0] || {};
+    return `<div class='card'>
+      <b>#${idx+1} ${t.title}</b><br>
+      <span class='pill'>테마점수 ${fmt(t.themeScore)}</span>
+      <span class='pill'>상승종목비율 ${fmt(t.breadthPct)}%</span>
+      <span class='pill'>거래합 ${fmt(t.tradeSum,0)}</span>
+      <hr style='border-color:#1f2937'>
+      <div><b>대표 주도주:</b> ${l.name||'-'} (${l.code||'-'})</div>
+      <div>등락률 ${pct(l.changeRatePct||0)} · 거래대금 ${fmt(l.tradeValue,0)} · 리더점수 ${fmt(l.leadershipScore)}</div>
+      ${l.chartUrl?`<div><a target='_blank' href='${l.chartUrl}'>차트 보기</a></div>`:''}
+    </div>`;
+  }).join('');
+
+  const topLeaders = (d.leaders||[]).slice(0,15);
+  document.getElementById('leaders').innerHTML = `<b>주도주 TOP 15</b><br><br>` + topLeaders.map((x,i)=>
+    `${i+1}. ${x.name} (${x.code}) - ${x.themeTitle} | 리더점수 ${fmt(x.leadershipScore)} | 등락 ${pct(x.changeRatePct)} | 거래 ${fmt(x.tradeValue,0)}`
+  ).join('<br>');
+}
+load();
+</script>
+</body>
+</html>
