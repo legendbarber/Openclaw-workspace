@@ -60,6 +60,7 @@ async function load(){
   const topThemes = themes.slice(0,8);
   document.getElementById('themes').innerHTML = topThemes.map((t,idx)=>{
     const l = t.leaders?.[0] || {};
+    const p = l.plan || {};
     return `<div class='card'>
       <b>#${idx+1} ${t.title}</b><br>
       <span class='pill'>테마점수 ${fmt(t.themeScore)}</span>
@@ -68,14 +69,16 @@ async function load(){
       <hr style='border-color:#1f2937'>
       <div><b>대표 주도주:</b> ${l.name||'-'} (${l.code||'-'})</div>
       <div>등락률 ${pct(l.changeRatePct||0)} · 거래대금 ${fmt(l.tradeValue,0)} · 리더점수 ${fmt(l.leadershipScore)}</div>
+      <div><b>예상수익률:</b> ${pct(p.expectedReturnPct||0)} / <b>예상손절률:</b> ${pct(p.expectedLossPct||0)} / RR ${fmt(p.riskReward)}</div>
       ${l.chartUrl?`<div><a target='_blank' href='${l.chartUrl}'>차트 보기</a></div>`:''}
     </div>`;
   }).join('');
 
   const topLeaders = leaders.slice(0,15);
-  document.getElementById('leaders').innerHTML = `<b>주도주 TOP 15</b><br><br>` + topLeaders.map((x,i)=>
-    `${i+1}. ${x.name} (${x.code}) - ${x.themeTitle} | 리더점수 ${fmt(x.leadershipScore)} | 등락 ${pct(x.changeRatePct)} | 거래 ${fmt(x.tradeValue,0)}`
-  ).join('<br>');
+  document.getElementById('leaders').innerHTML = `<b>주도주 TOP 15</b><br><br>` + topLeaders.map((x,i)=>{
+    const p = x.plan || {};
+    return `${i+1}. ${x.name} (${x.code}) - ${x.themeTitle} | 리더점수 ${fmt(x.leadershipScore)} | 등락 ${pct(x.changeRatePct)} | 거래 ${fmt(x.tradeValue,0)} | 예상수익 ${pct(p.expectedReturnPct||0)} / 손절 ${pct(p.expectedLossPct||0)}`;
+  }).join('<br>');
 }
 
 async function saveToday(){

@@ -7,11 +7,14 @@ from datetime import datetime, UTC
 from typing import Any, Dict, List
 
 import numpy as np
+import pandas as pd
 import requests
+import yfinance as yf
 
 
 TEMA_API = "http://127.0.0.1:3010/api/themes"
 SNAPSHOT_DIR = Path(__file__).resolve().parent / "snapshots-theme-leaders"
+_PRICE_CACHE: Dict[str, pd.Series | None] = {}
 
 
 def _to_float(v: Any) -> float:
@@ -32,6 +35,63 @@ def _norm(arr: List[float]) -> List[float]:
     if hi - lo < 1e-9:
         return [50.0 for _ in arr]
     return [float((x - lo) / (hi - lo) * 100) for x in a]
+
+
+def _download_close(code: str) -> pd.Series | None:
+    code = str(code or "").strip()
+    if not code:
+        return None
+    if code in _PRICE_CACHE:
+        return _PRICE_CACHE[code]
+
+    for sym in (f"{code}.KS", f"{code}.KQ", code):
+        try:
+            df = yf.Ticker(sym).history(period="6mo", auto_adjust=True)
+            if df is not None and (not df.empty) and "Close" in df:
+                s = df["Close"].dropna()
+                if len(s) >= 30:
+                    _PRICE_CACHE[code] = s
+                    return s
+        except Exception:
+            pass
+
+    _PRICE_CACHE[code] = None
+    return None
+
+
+def _estimate_plan(row: Dict[str, Any]) -> Dict[str, Any]:
+    price = max(1.0, _to_float(row.get("price")))
+    chg = _to_float(row.get("changeRatePct"))
+
+    s = _download_close(str(row.get("code") or ""))
+    if s is not None and len(s) >= 30:
+        cur = float(s.iloc[-1])
+        atrp = float(s.pct_change().abs().tail(14).mean()) if len(s) >= 20 else 0.03
+        m1 = float(s.iloc[-1] / s.iloc[-21] - 1) if len(s) >= 22 else 0.0
+
+        loss_pct = -max(0.035, min(0.12, atrp * 1.8)) * 100
+        ret_pct = max(6.0, min(24.0, (0.08 + max(-0.02, m1 * 0.6)) * 100))
+        base = cur
+        basis = "price-series"
+    else:
+        # 데이터가 없으면 당일 변동 기반 보수적 추정
+        loss_pct = -max(4.0, min(12.0, abs(chg) * 0.7 + 3.0))
+        ret_pct = max(6.0, min(20.0, abs(chg) * 0.9 + 5.0))
+        base = price
+        basis = "fallback"
+
+    rr = ret_pct / abs(loss_pct) if loss_pct < 0 else 0.0
+    stop = base * (1 + loss_pct / 100)
+    tp1 = base * (1 + ret_pct / 100)
+
+    return {
+        "expectedReturnPct": round(ret_pct, 2),
+        "expectedLossPct": round(loss_pct, 2),
+        "riskReward": round(rr, 2),
+        "stopLoss": round(stop, 2),
+        "takeProfit1": round(tp1, 2),
+        "basis": basis,
+    }
 
 
 def build_theme_leader_report(limit_themes: int = 12, per_theme_pick: int = 2) -> Dict[str, Any]:
@@ -120,6 +180,14 @@ def build_theme_leader_report(limit_themes: int = 12, per_theme_pick: int = 2) -
 
     theme_cards.sort(key=lambda x: x["themeScore"], reverse=True)
     all_leaders.sort(key=lambda x: x["leadershipScore"], reverse=True)
+
+    # 주도주 매수 가정(당일 기준) 기대수익/손절률 추정
+    plan_cache: Dict[str, Dict[str, Any]] = {}
+    for row in all_leaders:
+        code = str(row.get("code") or "")
+        if code not in plan_cache:
+            plan_cache[code] = _estimate_plan(row)
+        row["plan"] = plan_cache[code]
 
     return {
         "generatedAt": datetime.now(UTC).isoformat().replace("+00:00", "Z"),
