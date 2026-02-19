@@ -21,6 +21,7 @@ from zoneinfo import ZoneInfo
 import urllib.request
 import urllib.parse
 import urllib.error
+import yfinance as yf
 
 app = Flask(__name__, static_folder="public")
 KST = ZoneInfo("Asia/Seoul")
@@ -203,6 +204,29 @@ def api_theme_now_kr_refresh():
         return jsonify({"ok": True, "generatedAt": data.get("generatedAt")})
     except Exception as e:
         return jsonify({"ok": False, "message": str(e)}), 500
+
+
+@app.get('/api/chart/<symbol>')
+def api_chart_symbol(symbol: str):
+    period = request.args.get('period', default='6mo', type=str) or '6mo'
+    interval = request.args.get('interval', default='1d', type=str) or '1d'
+    try:
+        hist = yf.Ticker(symbol).history(period=period, interval=interval, auto_adjust=True)
+        if hist is None or hist.empty:
+            return jsonify({"ok": False, "message": "no_data", "symbol": symbol}), 404
+
+        labels = [idx.strftime('%Y-%m-%d') for idx in hist.index]
+        close = [round(float(v), 4) for v in hist['Close'].tolist()]
+        return jsonify({
+            "ok": True,
+            "symbol": symbol,
+            "period": period,
+            "interval": interval,
+            "labels": labels,
+            "close": close,
+        })
+    except Exception as e:
+        return jsonify({"ok": False, "message": str(e), "symbol": symbol}), 500
 
 
 # invest-recommend 하위 캘린더 경로

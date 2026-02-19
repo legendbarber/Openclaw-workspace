@@ -9,43 +9,122 @@
     .row{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
     button{background:#2563eb;color:white;border:none;border-radius:8px;padding:8px 12px;cursor:pointer}
     .sub{opacity:.8;margin:10px 0 16px}
-    .grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:12px}
+    .grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(320px,1fr));gap:12px}
     .card{background:#121933;border:1px solid #2a355f;border-radius:12px;padding:12px}
     table{width:100%;border-collapse:collapse;font-size:14px}
     th,td{padding:6px;border-bottom:1px solid #29335f;text-align:left}
+    .sym{color:#93c5fd;cursor:pointer;text-decoration:underline}
+    #chartWrap{margin-top:14px}
+    #chartMeta{opacity:.85;margin-bottom:8px}
   </style>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 </head>
 <body>
   <div class="row">
     <h1 style="margin:0">한국주식 테마 스코어보드</h1>
-    <button onclick="refreshNow()">지금 갱신</button>
+    <button onclick="refreshNow(event)">지금 갱신</button>
   </div>
   <div class="sub" id="meta">로딩 중...</div>
 
   <div class="card" id="top"></div>
+
+  <div class="card" id="chartWrap">
+    <h3 style="margin-top:0">종목 차트</h3>
+    <div id="chartMeta">아래 표에서 종목명을 클릭하면 차트가 표시됩니다.</div>
+    <canvas id="priceChart" height="90"></canvas>
+  </div>
+
   <br/>
   <div class="grid" id="themes"></div>
 
 <script>
+let priceChart = null;
+
+function esc(s){
+  return String(s).replace(/'/g, "\\'");
+}
+
+function renderRows(items){
+  return items.map(m=>{
+    const label = `${m.name} (${m.symbol.replace('.KS','').replace('.KQ','')})`;
+    return `<tr>
+      <td><span class="sym" onclick="loadChart('${esc(m.symbol)}','${esc(label)}')">${m.name}</span></td>
+      <td>${m.score}</td><td>${m.m1}%</td><td>${m.m3}%</td>
+    </tr>`;
+  }).join('');
+}
+
 async function load(){
   const r = await fetch('/theme-now-kr.json?_=' + Date.now());
   const d = await r.json();
   document.getElementById('meta').textContent = `${d.generatedAt} | ${d.method}`;
 
-  const topRows = d.topPicks.map(x=>`<tr><td>${x.theme}</td><td>${x.name}</td><td>${x.score}</td><td>${x.m1}%</td><td>${x.m3}%</td></tr>`).join('');
+  const topRows = d.topPicks.map(x=>{
+    const label = `${x.name} (${x.symbol.replace('.KS','').replace('.KQ','')})`;
+    return `<tr>
+      <td>${x.theme}</td>
+      <td><span class="sym" onclick="loadChart('${esc(x.symbol)}','${esc(label)}')">${x.name}</span></td>
+      <td>${x.score}</td><td>${x.m1}%</td><td>${x.m3}%</td>
+    </tr>`;
+  }).join('');
+
   document.getElementById('top').innerHTML = `<h3>Top Picks (KR)</h3>
     <table><thead><tr><th>테마</th><th>종목</th><th>점수</th><th>1M</th><th>3M</th></tr></thead><tbody>${topRows}</tbody></table>
     <div style="margin-top:8px;opacity:.7">${d.note}</div>`;
 
   document.getElementById('themes').innerHTML = d.themes.map(t=>{
-    const rows = t.leaders.map(m=>`<tr><td>${m.name}</td><td>${m.score}</td><td>${m.m1}%</td><td>${m.m3}%</td></tr>`).join('');
+    const rows = renderRows(t.leaders);
     return `<div class="card"><h3>${t.theme} (${t.themeScore})</h3>
       <table><thead><tr><th>종목</th><th>점수</th><th>1M</th><th>3M</th></tr></thead><tbody>${rows}</tbody></table></div>`
   }).join('');
+
+  if(d.topPicks?.length){
+    await loadChart(d.topPicks[0].symbol, `${d.topPicks[0].name} (${d.topPicks[0].symbol.replace('.KS','').replace('.KQ','')})`);
+  }
 }
 
-async function refreshNow(){
-  const btn = event.target;
+async function loadChart(symbol, label){
+  const r = await fetch(`/api/chart/${encodeURIComponent(symbol)}?period=6mo&interval=1d`);
+  const d = await r.json();
+  if(!r.ok || !d.ok){
+    document.getElementById('chartMeta').textContent = `${label} 차트 조회 실패`;
+    return;
+  }
+
+  const ctx = document.getElementById('priceChart').getContext('2d');
+  if(priceChart){ priceChart.destroy(); }
+
+  priceChart = new Chart(ctx, {
+    type: 'line',
+    data: {
+      labels: d.labels,
+      datasets: [{
+        label: `${label} 종가`,
+        data: d.close,
+        borderColor: '#60a5fa',
+        pointRadius: 0,
+        borderWidth: 2,
+        tension: 0.12
+      }]
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: true,
+      scales: {
+        x: { ticks: { color: '#c7d2fe', maxTicksLimit: 8 } },
+        y: { ticks: { color: '#c7d2fe' } }
+      },
+      plugins: {
+        legend: { labels: { color: '#e5e7eb' } }
+      }
+    }
+  });
+
+  document.getElementById('chartMeta').textContent = `${label} | 최근 6개월 일봉`;
+}
+
+async function refreshNow(e){
+  const btn = e.target;
   btn.disabled = true;
   btn.textContent = '갱신 중...';
   try{
@@ -53,8 +132,8 @@ async function refreshNow(){
     const d = await r.json();
     if(!r.ok){throw new Error(d.message || 'refresh failed');}
     await load();
-  }catch(e){
-    alert('갱신 실패: ' + e.message);
+  }catch(err){
+    alert('갱신 실패: ' + err.message);
   }finally{
     btn.disabled = false;
     btn.textContent = '지금 갱신';
