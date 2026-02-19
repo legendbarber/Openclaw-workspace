@@ -21,6 +21,7 @@
   <h1>🔥 당일 주도테마 · 주도주</h1>
   <div class="muted">테마 강도 + 테마 내 주도주 점수로 당일 흐름을 빠르게 확인</div>
   <button onclick="load()">새로 계산</button>
+  <button onclick="saveToday()">당일 기록 저장</button>
   <div id="meta" class="card"></div>
   <div id="themes" class="row"></div>
   <div id="leaders" class="card"></div>
@@ -29,21 +30,33 @@
 const fmt=(v,d=2)=> (v===null||v===undefined)?'-':Number(v).toLocaleString(undefined,{maximumFractionDigits:d});
 const pct=v=>`${v>0?'+':''}${fmt(v,2)}%`;
 
+function getDateFromPath(){
+  const m = location.pathname.match(/\/theme-leaders\/(\d{6})$/);
+  return m ? m[1] : null;
+}
+
 async function load(){
-  const r = await fetch(`/api/theme-leaders?limit=12&pick=2&t=${Date.now()}`, {cache:'no-store'});
+  const pathDate = getDateFromPath();
+  const url = pathDate
+    ? `/api/theme-leaders/snapshots/${pathDate}?t=${Date.now()}`
+    : `/api/theme-leaders?limit=12&pick=2&t=${Date.now()}`;
+  const r = await fetch(url, {cache:'no-store'});
   const d = await r.json();
   if(!r.ok){
     document.getElementById('meta').innerHTML = `<b>오류:</b> ${d.message||d.error||'unknown'}`;
     return;
   }
 
+  const themes = d.themes || d.topThemes || [];
+  const leaders = d.leaders || d.topLeaders || [];
+
   document.getElementById('meta').innerHTML = `
     <b>기준일:</b> ${d.date || '-'}<br>
-    <b>생성시각:</b> ${new Date(d.generatedAt).toLocaleString()}<br>
-    <b>로직:</b> ${d.methodology}
+    <b>생성시각:</b> ${new Date((d.generatedAt||d.savedAt||new Date().toISOString())).toLocaleString()}<br>
+    <b>로직:</b> ${d.methodology || '-'}
   `;
 
-  const topThemes = (d.themes||[]).slice(0,8);
+  const topThemes = themes.slice(0,8);
   document.getElementById('themes').innerHTML = topThemes.map((t,idx)=>{
     const l = t.leaders?.[0] || {};
     return `<div class='card'>
@@ -58,11 +71,22 @@ async function load(){
     </div>`;
   }).join('');
 
-  const topLeaders = (d.leaders||[]).slice(0,15);
+  const topLeaders = leaders.slice(0,15);
   document.getElementById('leaders').innerHTML = `<b>주도주 TOP 15</b><br><br>` + topLeaders.map((x,i)=>
     `${i+1}. ${x.name} (${x.code}) - ${x.themeTitle} | 리더점수 ${fmt(x.leadershipScore)} | 등락 ${pct(x.changeRatePct)} | 거래 ${fmt(x.tradeValue,0)}`
   ).join('<br>');
 }
+
+async function saveToday(){
+  const r = await fetch(`/api/theme-leaders/save?limit=12&pick=2&t=${Date.now()}`, {cache:'no-store'});
+  const d = await r.json();
+  if(!r.ok){
+    alert(`저장 실패: ${d.message||d.error||'unknown'}`);
+    return;
+  }
+  alert(d.saved ? `저장 완료: ${d.date}` : `이미 저장됨: ${d.date}`);
+}
+
 load();
 </script>
 </body>

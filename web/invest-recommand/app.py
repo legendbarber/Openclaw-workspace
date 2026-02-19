@@ -7,7 +7,12 @@ from engine import (
     list_snapshot_dates_by_month,
     get_current_change_vs_snapshot,
 )
-from theme_leader import build_theme_leader_report
+from theme_leader import (
+    build_theme_leader_report,
+    save_theme_leader_snapshot,
+    get_theme_leader_snapshot,
+    list_theme_leader_snapshots,
+)
 import threading
 import time
 from datetime import datetime
@@ -101,6 +106,31 @@ def api_theme_leaders():
         return jsonify({"error": "theme_leader_unavailable", "message": str(e)}), 502
 
 
+@app.get('/api/theme-leaders/save')
+def api_theme_leaders_save():
+    limit = request.args.get('limit', default=12, type=int) or 12
+    pick = request.args.get('pick', default=2, type=int) or 2
+    force = str(request.args.get('force', '0')).lower() in {'1', 'true', 'yes', 'y'}
+    try:
+        return jsonify(save_theme_leader_snapshot(force=force, limit_themes=max(3, min(limit, 30)), per_theme_pick=max(1, min(pick, 5))))
+    except Exception as e:
+        return jsonify({"error": "theme_leader_save_failed", "message": str(e)}), 502
+
+
+@app.get('/api/theme-leaders/snapshots')
+def api_theme_leaders_snapshots():
+    limit = request.args.get('limit', default=60, type=int) or 60
+    return jsonify({"items": list_theme_leader_snapshots(limit=max(1, min(limit, 365)))})
+
+
+@app.get('/api/theme-leaders/snapshots/<date>')
+def api_theme_leaders_snapshot_by_date(date: str):
+    data = get_theme_leader_snapshot(date)
+    if not data:
+        return jsonify({"error": "not_found", "date": date}), 404
+    return jsonify(data)
+
+
 @app.get('/')
 def home():
     return """
@@ -140,6 +170,12 @@ def invest_history_assets(filename):
 
 @app.get('/theme-leaders')
 def theme_leaders_page():
+    return send_from_directory(app.static_folder, 'theme-leaders.html')
+
+
+@app.get('/theme-leaders/<date>')
+def theme_leaders_page_by_date(date: str):
+    # 하위 URL 파싱: /theme-leaders/260219 형태
     return send_from_directory(app.static_folder, 'theme-leaders.html')
 
 

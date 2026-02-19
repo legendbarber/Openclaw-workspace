@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import re
+import json
+from pathlib import Path
 from datetime import datetime, UTC
 from typing import Any, Dict, List
 
@@ -9,6 +11,7 @@ import requests
 
 
 TEMA_API = "http://127.0.0.1:3010/api/themes"
+SNAPSHOT_DIR = Path(__file__).resolve().parent / "snapshots-theme-leaders"
 
 
 def _to_float(v: Any) -> float:
@@ -126,3 +129,56 @@ def build_theme_leader_report(limit_themes: int = 12, per_theme_pick: int = 2) -
         "themes": theme_cards,
         "leaders": all_leaders[:20],
     }
+
+
+def save_theme_leader_snapshot(force: bool = False, limit_themes: int = 12, per_theme_pick: int = 2) -> Dict[str, Any]:
+    SNAPSHOT_DIR.mkdir(parents=True, exist_ok=True)
+    report = build_theme_leader_report(limit_themes=limit_themes, per_theme_pick=per_theme_pick)
+    day = report.get("date") or datetime.now(UTC).strftime("%y%m%d")
+    path = SNAPSHOT_DIR / f"{day}.json"
+
+    if path.exists() and not force:
+        old = json.loads(path.read_text(encoding="utf-8"))
+        return {"saved": False, "reason": "already_exists", "date": day, "path": str(path), "generatedAt": old.get("generatedAt")}
+
+    payload = {
+        "date": day,
+        "savedAt": datetime.now(UTC).isoformat().replace("+00:00", "Z"),
+        "generatedAt": report.get("generatedAt"),
+        "methodology": report.get("methodology"),
+        "topThemes": (report.get("themes") or [])[:10],
+        "topLeaders": (report.get("leaders") or [])[:30],
+    }
+    path.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
+    return {"saved": True, "date": day, "path": str(path), "generatedAt": payload.get("generatedAt")}
+
+
+def get_theme_leader_snapshot(date: str) -> Dict[str, Any] | None:
+    SNAPSHOT_DIR.mkdir(parents=True, exist_ok=True)
+    if not re.match(r"^\d{6}$", date or ""):
+        return None
+    p = SNAPSHOT_DIR / f"{date}.json"
+    if not p.exists():
+        return None
+    try:
+        return json.loads(p.read_text(encoding="utf-8"))
+    except Exception:
+        return None
+
+
+def list_theme_leader_snapshots(limit: int = 60) -> List[Dict[str, Any]]:
+    SNAPSHOT_DIR.mkdir(parents=True, exist_ok=True)
+    out = []
+    files = sorted(SNAPSHOT_DIR.glob("*.json"), reverse=True)[: max(1, limit)]
+    for p in files:
+        try:
+            j = json.loads(p.read_text(encoding="utf-8"))
+            out.append({
+                "date": j.get("date") or p.stem,
+                "generatedAt": j.get("generatedAt"),
+                "topTheme": ((j.get("topThemes") or [{}])[0]).get("title"),
+                "path": str(p),
+            })
+        except Exception:
+            out.append({"date": p.stem, "generatedAt": None, "topTheme": None, "path": str(p)})
+    return out
