@@ -84,8 +84,8 @@ def build_theme_leader_report(limit_themes: int = 12, per_theme_pick: int = 2) -
     chg_n = _norm([x["changeRatePct"] for x in all_rows])
     tv_n = _norm([x["tradeValue"] for x in all_rows])
     for i, row in enumerate(all_rows):
-        # 사용자 요청: 리더점수에서 거래량 제외
-        row["leadershipScore"] = round(0.6 * chg_n[i] + 0.4 * tv_n[i], 2)
+        # 사용자 요청: 리더점수에서 거래량 제외 + 거래대금 비중 강화(75:25)
+        row["leadershipScore"] = round(0.25 * chg_n[i] + 0.75 * tv_n[i], 2)
 
     # per-theme leaders
     by_theme: Dict[str, List[Dict[str, Any]]] = {}
@@ -124,7 +124,7 @@ def build_theme_leader_report(limit_themes: int = 12, per_theme_pick: int = 2) -
     return {
         "generatedAt": datetime.now(UTC).isoformat().replace("+00:00", "Z"),
         "date": data.get("date"),
-        "methodology": "ThemeScore = 0.75*LeaderScore(avg top picks) + 0.25*Breadth; LeaderScore = 0.60*Change + 0.40*TradeValue (cross-theme normalized)",
+        "methodology": "ThemeScore = 0.75*LeaderScore(avg top picks) + 0.25*Breadth; LeaderScore = 0.25*Change + 0.75*TradeValue (cross-theme normalized)",
         "themes": theme_cards,
         "leaders": all_leaders[:20],
     }
