@@ -1106,9 +1106,12 @@
       toast("초기화 실패", e.message || String(e), true);
     }
 
-    // SW register (network-only)
+    // 새로고침 이슈 방지: service worker 비활성화 + 기존 등록 해제
     if ("serviceWorker" in navigator){
-      try{ await navigator.serviceWorker.register(`${BASE_PATH}/static/sw.js`); }catch(e){}
+      try{
+        const regs = await navigator.serviceWorker.getRegistrations();
+        await Promise.all(regs.map((r) => r.unregister()));
+      }catch(e){}
     }
   }
 
