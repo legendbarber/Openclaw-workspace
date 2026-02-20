@@ -130,11 +130,11 @@ async function pickDate(ds){
     };
 
     const risk = (s.riskAdjustedTop5||[]).slice(0,5)
-      .map((x,i)=>`#${i+1} ${x.symbol} (${fmtPct(x.expectedReturnPct)} / RR ${fmt(x.riskReward)}) · ${withPerf(x)}`)
+      .map((x,i)=>`#${i+1} ${x.symbol} (${x.name||'-'}) (${fmtPct(x.expectedReturnPct)} / RR ${fmt(x.riskReward)}) · ${withPerf(x)}`)
       .join('<br>');
 
     const ret = (s.highReturnTop5||[]).slice(0,5)
-      .map((x,i)=>`#${i+1} ${x.symbol} (${fmtPct(x.expectedReturnPct)}) · ${withPerf(x)}`)
+      .map((x,i)=>`#${i+1} ${x.symbol} (${x.name||'-'}) (${fmtPct(x.expectedReturnPct)}) · ${withPerf(x)}`)
       .join('<br>');
 
     detail.innerHTML = `

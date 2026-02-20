@@ -26,6 +26,7 @@
     .top-loader .bar{position:absolute;height:100%;width:28%;background:#60a5fa;animation:slide 1.1s linear infinite;border-radius:999px}
     @keyframes slide{0%{left:-30%}100%{left:100%}}
   </style>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 </head>
 <body>
   <div id="topLoader" class="top-loader"><div class="bar"></div></div>
@@ -111,6 +112,33 @@ function recommendationWhy(r, mode='risk'){
   return reasons.join('<br>');
 }
 
+const miniCharts = {};
+async function renderMiniChart(symbol, canvasId){
+  const canvas = document.getElementById(canvasId);
+  if(!canvas) return;
+
+  try{
+    const res = await fetch(`/api/chart/${encodeURIComponent(symbol)}?period=3mo&interval=1d`);
+    const d = await res.json();
+    if(!res.ok || !d.ok || !d.labels?.length) return;
+
+    if(miniCharts[canvasId]) miniCharts[canvasId].destroy();
+    miniCharts[canvasId] = new Chart(canvas.getContext('2d'), {
+      type:'line',
+      data:{
+        labels:d.labels,
+        datasets:[{data:d.close, borderColor:'#60a5fa', borderWidth:1.6, pointRadius:0, tension:0.15}]
+      },
+      options:{
+        responsive:true,
+        maintainAspectRatio:true,
+        scales:{x:{display:false},y:{display:false}},
+        plugins:{legend:{display:false}, tooltip:{enabled:false}}
+      }
+    });
+  }catch(_){ }
+}
+
 async function loadData(){
   const d = await apiGet(`/api/report?t=${Date.now()}`);
 
@@ -155,6 +183,7 @@ async function loadData(){
     <div><b>수익률 평가 시점:</b> 목표가 도달 시점 기준 (${expectedHorizon(x.plan.ttlTradingDays)})</div>
     <div>유효기간: ${x.plan.ttlTradingDays}거래일</div>
     <div style='margin-top:8px'><b>추천 근거:</b><br>${recommendationWhy(x, 'risk')}</div>
+    <div style='margin-top:10px'><b>미니 차트 (3개월)</b><br><canvas id='mini-top' height='80'></canvas></div>
     <div>무효화 조건: ${x.plan.invalidationRule}</div>
     <div style='margin-top:8px'>
       <a href='${x.links.yahoo}' target='_blank'>Yahoo</a> ·
@@ -181,6 +210,7 @@ async function loadData(){
       <b>예상 손실률:</b> ${fmtPct(lossPct)} / <b>예상 수익률:</b> ${fmtPct(profitPct)}<br>
       <b>RR(기대수익/위험):</b> ${fmt(r.riskReward || (profitPct && lossPct ? (profitPct/Math.abs(lossPct)) : null))}<br>
       <b>수익률 평가 시점:</b> ${expectedHorizon(r.plan.ttlTradingDays)}<br>
+      <b>미니 차트 (3개월):</b><br><canvas id='risk-mini-${idx}' height='70'></canvas><br>
       <b>추천 근거:</b> ${recommendationWhy(r, 'risk')}
     </div>
   `}).join('');
@@ -200,9 +230,18 @@ async function loadData(){
       <b>예상 손실률:</b> ${fmtPct(lossPct)} / <b>예상 수익률:</b> ${fmtPct(profitPct)}<br>
       <b>RR(기대수익/위험):</b> ${fmt(r.riskReward || (profitPct && lossPct ? (profitPct/Math.abs(lossPct)) : null))}<br>
       <b>수익률 평가 시점:</b> ${expectedHorizon(r.plan.ttlTradingDays)}<br>
+      <b>미니 차트 (3개월):</b><br><canvas id='ret-mini-${idx}' height='70'></canvas><br>
       <b>추천 근거:</b> ${recommendationWhy(r, 'return')}
     </div>
   `}).join('');
+
+  await renderMiniChart(x.symbol, 'mini-top');
+  for(let i=0;i<riskAdjustedTop5.length;i++){
+    await renderMiniChart(riskAdjustedTop5[i].symbol, `risk-mini-${i}`);
+  }
+  for(let i=0;i<highReturnTop5.length;i++){
+    await renderMiniChart(highReturnTop5[i].symbol, `ret-mini-${i}`);
+  }
 
   const c = x.components;
   document.getElementById('breakdown').innerHTML = `
