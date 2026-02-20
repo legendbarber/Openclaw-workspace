@@ -5,22 +5,19 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Invest Recommand</title>
   <style>
-    body{margin:0;background:#0b1220;color:#e5e7eb;font-family:Arial,sans-serif}
-    .wrap{max-width:1000px;margin:0 auto;padding:20px}
-    .card{background:#111827;border:1px solid #1f2937;border-radius:14px;padding:16px;margin-top:12px}
-    .big{font-size:28px;font-weight:700}
-    .muted{color:#9ca3af}
-    button{background:#2563eb;border:0;color:#fff;padding:9px 12px;border-radius:8px;cursor:pointer}
-    .row{display:grid;grid-template-columns:1fr 1fr;gap:10px}
-    @media(max-width:900px){.row{grid-template-columns:1fr}}
+    body{margin:0;background:#0b1220;color:#e5e7eb;font-family:Inter,Arial,sans-serif}
+    .wrap{max-width:1200px;margin:0 auto;padding:20px}
+    .topbar{display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap}
+    .badge{background:#1d4ed8;color:#fff;padding:7px 12px;border-radius:999px;font-size:13px}
+    .muted{color:#94a3b8}
+    button{background:#2563eb;border:0;color:#fff;padding:9px 12px;border-radius:10px;cursor:pointer}
+    .kpi{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-top:12px}
+    .kpi .item{background:#0f172a;border:1px solid #243146;border-radius:12px;padding:10px}
+    .card{background:#111827;border:1px solid #243146;border-radius:14px;padding:16px;margin-top:12px}
+    .big{font-size:30px;font-weight:700;line-height:1.2}
+    .row{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+    @media(max-width:980px){.kpi{grid-template-columns:repeat(2,1fr)}.row{grid-template-columns:1fr}}
     a{color:#93c5fd}
-    .cal-head{display:flex;justify-content:space-between;align-items:center;gap:8px;margin-bottom:10px}
-    .cal-grid{display:grid;grid-template-columns:repeat(7,1fr);gap:6px}
-    .cal-dow{font-size:12px;color:#9ca3af;text-align:center}
-    .cal-day{border:1px solid #1f2937;border-radius:8px;min-height:54px;padding:6px;font-size:12px;position:relative;background:#0f172a;cursor:pointer}
-    .cal-day.empty{opacity:.35;cursor:default}
-    .cal-day.active{outline:2px solid #2563eb}
-    .dot{width:7px;height:7px;border-radius:50%;background:#22c55e;position:absolute;right:6px;bottom:6px}
     .tiny{font-size:12px;color:#9ca3af}
     .top-loader{position:fixed;top:0;left:0;right:0;height:3px;background:transparent;z-index:9999;overflow:hidden;display:none}
     .top-loader .bar{position:absolute;height:100%;width:28%;background:#60a5fa;animation:slide 1.1s linear infinite;border-radius:999px}
@@ -30,12 +27,26 @@
 <body>
   <div id="topLoader" class="top-loader"><div class="bar"></div></div>
   <div class="wrap">
-    <h1>🎯 Invest Recommand</h1>
-    <div class="muted">한국/미국 단일주식 추천 (위험대비 기대수익 + 절대 기대수익)</div>
-    <button onclick="loadData()">새로 조회</button>
+    <div class="topbar">
+      <div>
+        <h1 style="margin:0">Invest Recommand · Clean Pro</h1>
+        <div class="muted">한국/미국 단일주식 추천 (위험대비 기대수익 + 절대 기대수익)</div>
+      </div>
+      <div style="display:flex;gap:8px;align-items:center">
+        <span class="badge">LIVE SCANNER</span>
+        <button onclick="loadData()">새로 조회</button>
+      </div>
+    </div>
+
+    <div class="kpi" id="kpiRow">
+      <div class="item"><div class="tiny">Top Pick</div><b id="kpiSymbol">-</b></div>
+      <div class="item"><div class="tiny">종합점수</div><b id="kpiScore">-</b></div>
+      <div class="item"><div class="tiny">예상수익(1차)</div><b id="kpiRet">-</b></div>
+      <div class="item"><div class="tiny">Risk/Reward</div><b id="kpiRR">-</b></div>
+    </div>
 
     <div id="meta" class="card"></div>
-    <div class="card">📁 과거 추천 기록 조회는 <a href="/invest-recommend/calendar">/invest-recommend/calendar</a> (invest-recommend 하위 경로)에서 확인하세요.</div>
+    <div class="card">📁 과거 추천 기록 조회는 <a href="/invest-recommend/calendar">/invest-recommend/calendar</a> 에서 확인</div>
     <div id="notrade" class="card" style="display:none"></div>
     <div id="top" class="card"></div>
     <div id="riskAdjustedTop5" class="row"></div>
@@ -258,12 +269,21 @@ async function loadData(){
 
   const x = d.topPick;
   if(!x){
+    document.getElementById('kpiSymbol').textContent='-';
+    document.getElementById('kpiScore').textContent='-';
+    document.getElementById('kpiRet').textContent='-';
+    document.getElementById('kpiRR').textContent='-';
     document.getElementById('top').innerHTML = '추천 후보 없음';
     document.getElementById('riskAdjustedTop5').innerHTML = '';
     document.getElementById('highReturnTop5').innerHTML = '';
     document.getElementById('breakdown').innerHTML = '';
     return;
   }
+
+  document.getElementById('kpiSymbol').textContent = `${x.symbol} (${x.name})`;
+  document.getElementById('kpiScore').textContent = fmt(x.score);
+  document.getElementById('kpiRet').textContent = fmtPct(x.expectedReturnPct);
+  document.getElementById('kpiRR').textContent = fmt(x.riskReward);
 
   const topLossPct = pctFrom(x.currentPrice, x.plan.stopLoss);
   const topProfit1Pct = pctFrom(x.currentPrice, x.plan.takeProfit1);
