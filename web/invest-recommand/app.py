@@ -30,6 +30,8 @@ TEMA_WEB_V2_ORIGIN = "http://127.0.0.1:3010"
 # lightweight in-memory cache for faster UI response
 _REPORT_CACHE = {"ts": 0.0, "data": None}
 _REPORT_TTL_SEC = 60
+_CHART_CACHE = {}
+_CHART_TTL_SEC = 300
 
 
 def _snapshot_worker():
@@ -210,21 +212,57 @@ def api_theme_now_kr_refresh():
 def api_chart_symbol(symbol: str):
     period = request.args.get('period', default='6mo', type=str) or '6mo'
     interval = request.args.get('interval', default='1d', type=str) or '1d'
+    key = f"{symbol}|{period}|{interval}"
+    now = time.time()
+
+    cached = _CHART_CACHE.get(key)
+    if cached and (now - cached.get("ts", 0) <= _CHART_TTL_SEC):
+        return jsonify(cached["data"])
+
     try:
         hist = yf.Ticker(symbol).history(period=period, interval=interval, auto_adjust=True)
         if hist is None or hist.empty:
-            return jsonify({"ok": False, "message": "no_data", "symbol": symbol}), 404
+            # fallback path (sometimes history intermittently fails)
+            hist = yf.download(tickers=symbol, period=period, interval=interval, auto_adjust=True, progress=False, threads=False)
+            if hist is None or hist.empty:
+                return jsonify({"ok": False, "message": "no_data", "symbol": symbol}), 404
+            if 'Close' not in hist:
+                if hasattr(hist, 'columns') and getattr(hist.columns, 'nlevels', 1) > 1 and symbol in hist.columns.get_level_values(0):
+                    hist = hist[symbol]
 
-        labels = [idx.strftime('%Y-%m-%d') for idx in hist.index]
-        close = [round(float(v), 4) for v in hist['Close'].tolist()]
-        return jsonify({
+        if 'Close' not in hist:
+            return jsonify({"ok": False, "message": "close_not_found", "symbol": symbol}), 404
+
+        for col in ['Open', 'High', 'Low', 'Close']:
+            if col not in hist:
+                return jsonify({"ok": False, "message": f"{col.lower()}_not_found", "symbol": symbol}), 404
+
+        cols = ['Open', 'High', 'Low', 'Close'] + (['Volume'] if 'Volume' in hist else [])
+        ohlcv = hist[cols].dropna(subset=['Open', 'High', 'Low', 'Close'])
+        if ohlcv.empty:
+            return jsonify({"ok": False, "message": "no_ohlc", "symbol": symbol}), 404
+
+        labels = [idx.strftime('%Y-%m-%d') for idx in ohlcv.index]
+        open_ = [round(float(v), 4) for v in ohlcv['Open'].tolist()]
+        high = [round(float(v), 4) for v in ohlcv['High'].tolist()]
+        low = [round(float(v), 4) for v in ohlcv['Low'].tolist()]
+        close = [round(float(v), 4) for v in ohlcv['Close'].tolist()]
+        volume = [int(float(v)) for v in ohlcv['Volume'].fillna(0).tolist()] if 'Volume' in ohlcv else []
+
+        data = {
             "ok": True,
             "symbol": symbol,
             "period": period,
             "interval": interval,
             "labels": labels,
+            "open": open_,
+            "high": high,
+            "low": low,
             "close": close,
-        })
+            "volume": volume,
+        }
+        _CHART_CACHE[key] = {"ts": now, "data": data}
+        return jsonify(data)
     except Exception as e:
         return jsonify({"ok": False, "message": str(e), "symbol": symbol}), 500
 

@@ -118,38 +118,123 @@ async function renderMiniChart(symbol, elId){
   try{
     const res = await fetch(`/api/chart/${encodeURIComponent(symbol)}?period=3mo&interval=1d`);
     const d = await res.json();
-    if(!res.ok || !d.ok || !d.close?.length){
+    if(!res.ok || !d.ok || !d.open?.length || !d.high?.length || !d.low?.length || !d.close?.length){
+      el.innerHTML = `<div class='tiny'>차트 로딩 실패 · <a href='https://finance.yahoo.com/quote/${symbol}' target='_blank'>Yahoo 차트 보기</a></div>`;
+      return;
+    }
+
+    const n = Math.min(d.open.length, d.high.length, d.low.length, d.close.length);
+    if(!n){
       el.innerHTML = `<div class='tiny'>차트 데이터 없음</div>`;
       return;
     }
 
-    const values = d.close.map(Number).filter(v=>Number.isFinite(v));
-    if(!values.length){
+    const o = d.open.slice(-80).map(Number);
+    const hArr = d.high.slice(-80).map(Number);
+    const lArr = d.low.slice(-80).map(Number);
+    const c = d.close.slice(-80).map(Number);
+    const vArr = (d.volume || []).slice(-80).map(Number);
+    const m = o.length;
+
+    const all = [...hArr, ...lArr].filter(v=>Number.isFinite(v));
+    if(!all.length){
       el.innerHTML = `<div class='tiny'>차트 데이터 없음</div>`;
       return;
     }
 
-    const w = 260, h = 70, p = 4;
-    const min = Math.min(...values);
-    const max = Math.max(...values);
+    const sma = (arr, p)=>arr.map((_,i)=>{
+      if(i < p-1) return null;
+      const w = arr.slice(i-p+1,i+1).filter(Number.isFinite);
+      if(w.length!==p) return null;
+      return w.reduce((a,b)=>a+b,0)/p;
+    });
+    const ma20 = sma(c,20);
+    const ma60 = sma(c,60);
+
+    const w = 340, hPx = 180;
+    const pL = 8, pR = 46, pT = 10, pB = 16;
+    const volH = 42;
+    const priceH = hPx - pT - pB - volH - 8;
+    const plotW = w - pL - pR;
+
+    const minRaw = Math.min(...all);
+    const maxRaw = Math.max(...all);
+    const pad = (maxRaw - minRaw) * 0.06;
+    const min = minRaw - pad;
+    const max = maxRaw + pad;
     const span = (max - min) || 1;
+    const y = (v) => pT + (max - v) / span * priceH;
 
-    const pts = values.map((v,i)=>{
-      const x = p + (i/(values.length-1 || 1)) * (w - p*2);
-      const y = h - p - ((v - min)/span) * (h - p*2);
-      return `${x.toFixed(1)},${y.toFixed(1)}`;
-    }).join(' ');
+    const volTop = pT + priceH + 8;
+    const maxVol = Math.max(...vArr.filter(Number.isFinite), 1);
 
-    const up = values[values.length-1] >= values[0];
-    const color = up ? '#22c55e' : '#ef4444';
+    const slot = plotW / (m || 1);
+    const bodyW = Math.max(2, Math.min(7, slot * 0.62));
+
+    const grid = [];
+    for(let i=0;i<=4;i++){
+      const gy = pT + (priceH/4)*i;
+      grid.push(`<line x1='${pL}' y1='${gy.toFixed(2)}' x2='${w-pR}' y2='${gy.toFixed(2)}' stroke='#24304f' stroke-width='1'/>`);
+    }
+
+    const wick = [];
+    const body = [];
+    const vols = [];
+    for(let i=0;i<m;i++){
+      const cx = pL + slot*i + slot/2;
+      const oy = y(o[i]);
+      const cy = y(c[i]);
+      const hy = y(hArr[i]);
+      const ly = y(lArr[i]);
+      const up = c[i] >= o[i];
+      const color = up ? '#22c55e' : '#ef4444';
+
+      wick.push(`<line x1='${cx.toFixed(2)}' y1='${hy.toFixed(2)}' x2='${cx.toFixed(2)}' y2='${ly.toFixed(2)}' stroke='${color}' stroke-width='1.1'/>`);
+      const top = Math.min(oy, cy);
+      const bh = Math.max(Math.abs(cy - oy), 1.2);
+      body.push(`<rect x='${(cx-bodyW/2).toFixed(2)}' y='${top.toFixed(2)}' width='${bodyW.toFixed(2)}' height='${bh.toFixed(2)}' rx='0.6' fill='${color}'/>`);
+
+      const vol = Number.isFinite(vArr[i]) ? vArr[i] : 0;
+      const vh = (vol / maxVol) * volH;
+      vols.push(`<rect x='${(cx-bodyW/2).toFixed(2)}' y='${(volTop + (volH-vh)).toFixed(2)}' width='${bodyW.toFixed(2)}' height='${Math.max(vh,0.8).toFixed(2)}' fill='${up ? '#1f9d55' : '#b91c1c'}' opacity='0.75'/>`);
+    }
+
+    const toPath = (arr)=>{
+      const pts = [];
+      for(let i=0;i<m;i++){
+        if(!Number.isFinite(arr[i])) continue;
+        const x = pL + slot*i + slot/2;
+        const yy = y(arr[i]);
+        pts.push(`${x.toFixed(2)},${yy.toFixed(2)}`);
+      }
+      return pts.join(' ');
+    };
+
+    const ma20Path = toPath(ma20);
+    const ma60Path = toPath(ma60);
+
+    const maxTxt = maxRaw.toLocaleString(undefined,{maximumFractionDigits:0});
+    const minTxt = minRaw.toLocaleString(undefined,{maximumFractionDigits:0});
 
     el.innerHTML = `
-      <svg viewBox='0 0 ${w} ${h}' width='100%' height='70' preserveAspectRatio='none'>
-        <polyline fill='none' stroke='${color}' stroke-width='2' points='${pts}' />
+      <svg viewBox='0 0 ${w} ${hPx}' width='100%' height='180' preserveAspectRatio='xMidYMid meet'>
+        <rect x='0' y='0' width='${w}' height='${hPx}' fill='#0f172a' rx='6'/>
+        ${grid.join('')}
+        ${wick.join('')}
+        ${body.join('')}
+        ${ma20Path ? `<polyline fill='none' stroke='#f59e0b' stroke-width='1.4' points='${ma20Path}'/>` : ''}
+        ${ma60Path ? `<polyline fill='none' stroke='#60a5fa' stroke-width='1.4' points='${ma60Path}'/>` : ''}
+        <line x1='${pL}' y1='${volTop-1}' x2='${w-pR}' y2='${volTop-1}' stroke='#24304f' stroke-width='1'/>
+        ${vols.join('')}
+        <text x='${w-pR+4}' y='${(pT+10).toFixed(1)}' fill='#93a4c7' font-size='10'>${maxTxt}</text>
+        <text x='${w-pR+4}' y='${(pT+priceH).toFixed(1)}' fill='#93a4c7' font-size='10'>${minTxt}</text>
+        <text x='${pL}' y='${(hPx-4).toFixed(1)}' fill='#f59e0b' font-size='10'>MA20</text>
+        <text x='${(pL+38).toFixed(1)}' y='${(hPx-4).toFixed(1)}' fill='#60a5fa' font-size='10'>MA60</text>
+        <text x='${(w-pR-28).toFixed(1)}' y='${(volTop+10).toFixed(1)}' fill='#93a4c7' font-size='9'>VOL</text>
       </svg>
     `;
   }catch(_){
-    el.innerHTML = `<div class='tiny'>차트 로딩 실패</div>`;
+    el.innerHTML = `<div class='tiny'>차트 로딩 실패 · <a href='https://finance.yahoo.com/quote/${symbol}' target='_blank'>Yahoo 차트 보기</a></div>`;
   }
 }
 
