@@ -173,6 +173,17 @@ def invest_history_assets(filename):
     return send_from_directory(f"{app.static_folder}/invest-history", filename)
 
 
+@app.get('/invest-recommend/ui-candidates')
+def invest_ui_candidates_index():
+    return send_from_directory(f"{app.static_folder}/ui-candidates", 'index.html')
+
+
+@app.get('/invest-recommend/ui-candidates/<name>')
+def invest_ui_candidates_page(name: str):
+    fname = f"{name}.html" if not name.endswith('.html') else name
+    return send_from_directory(f"{app.static_folder}/ui-candidates", fname)
+
+
 @app.get('/theme-leaders')
 def theme_leaders_page():
     return send_from_directory(app.static_folder, 'theme-leaders.html')
