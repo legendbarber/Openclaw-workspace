@@ -1,0 +1,21 @@
+<!doctype html><html lang='ko'><head><meta charset='UTF-8'><meta name='viewport' content='width=device-width,initial-scale=1'><title>종목 상세 근거</title><style>body{margin:0;background:#111315;color:#e5e7eb;font-family:Inter,Arial,sans-serif}.wrap{max-width:980px;margin:auto;padding:20px}.card{background:#1a1d21;border:1px solid #2b3138;border-radius:12px;padding:14px;margin-top:12px}.muted{color:#9aa4b2}a{color:#cbd5e1}.h{font-size:28px;font-weight:700}</style></head><body><div class='wrap'><div><a href='/invest-recommend'>← 메인으로</a></div><div id='head' class='card'>불러오는 중...</div><div id='plan' class='card'></div><div id='reasons' class='card'></div></div><script>function fmt(v,d=2){return (v===null||v===undefined)?'-':Number(v).toLocaleString(undefined,{maximumFractionDigits:d});}function pct(v,d=2){if(v===null||v===undefined||Number.isNaN(Number(v)))return '-';const n=Number(v);const s=n>0?'+':'';return `${s}${n.toLocaleString(undefined,{maximumFractionDigits:d})}%`;}function getSymbol(){const parts=location.pathname.split('/');return decodeURIComponent(parts[parts.length-1]||'').toUpperCase();}function longExplain(r){const c=r.components||{};const rc=c.reportConsensus||{};const t=c.technical||{};const m=c.momentum||{};const risk=c.risk||{};const crowd=c.crowd||{};const liq=c.liquidityScore;return `
+<b>1) 리포트/기관 합의 (R)</b><br>
+- 합의점수: ${fmt(rc.score)}점<br>
+- 목표가 괴리: ${pct(rc.upsidePct)}<br>
+- 추천지수/의견수: ${fmt(rc.recommendationMean)} / ${fmt(rc.analystOpinions,0)}<br><br>
+<b>2) 기술적 타이밍 (T)</b><br>
+- 기술점수: ${fmt(t.score)}점 (셋업: ${t.setup||'-'})<br>
+- RSI(14): ${fmt(t.rsi14)} / MA20 이격: ${pct(t.distMa20Pct)} / 20일고점대비: ${pct(t.from20dHighPct)}<br>
+- 해석: 과열/침체 구간과 추세 구조를 함께 반영한 진입 타이밍 평가<br><br>
+<b>3) 모멘텀 (M, 참고)</b><br>
+- 1M: ${pct(m.m1Pct)} · 3M: ${pct(m.m3Pct)} · 6M: ${pct(m.m6Pct)}<br>
+- 모멘텀 점수: ${fmt(m.score)}점<br><br>
+<b>4) 리스크/유동성 (V/L)</b><br>
+- 유동성 점수: ${fmt(liq)}점<br>
+- 변동성: ${pct(risk.volPct)} / 최대낙폭(MDD): ${pct(risk.maxDrawdownPct)} / 리스크점수: ${fmt(risk.score)}<br>
+- 해석: 거래가능성과 급락내성 균형 확인<br><br>
+<b>5) 군중/뉴스 (C)</b><br>
+- 점수: ${fmt(crowd.score)} / 톤: ${fmt(crowd.tone,0)} / 헤드라인 수: ${fmt(crowd.headlineCount,0)}<br>
+- 해석: 뉴스 과열/악재 편중 여부 점검
+`;}
+(async()=>{const sym=getSymbol();const d=await (await fetch('/api/report?t='+Date.now())).json();const list=[...(d.riskAdjustedRankings||[]),...(d.highReturnRankings||[])];const map=new Map();for(const x of list){if(!map.has(x.symbol))map.set(x.symbol,x);}const r=map.get(sym)||d.topPick;if(!r){document.getElementById('head').innerHTML='종목을 찾을 수 없습니다.';return;}document.getElementById('head').innerHTML=`<div class='h'>${r.symbol} (${r.name})</div><div class='muted'>종합점수 ${fmt(r.score)} / RR ${fmt(r.riskReward)} / 현재가 ${fmt(r.currentPrice)}</div>`;document.getElementById('plan').innerHTML=`<b>운용 플랜</b><br>진입: ${fmt(r.plan.entryZone[0])} ~ ${fmt(r.plan.entryZone[1])}<br>손절: ${fmt(r.plan.stopLoss)} / 익절1: ${fmt(r.plan.takeProfit1)} / 익절2: ${fmt(r.plan.takeProfit2)}<br>예상손실: ${pct(r.expectedLossPct)} / 예상수익(1차): ${pct(r.expectedReturnPct)} / 예상수익(2차): ${pct(r.expectedReturn2Pct)}<br>유효기간: ${r.plan.ttlTradingDays} 거래일<br>무효화 조건: ${r.plan.invalidationRule}`;document.getElementById('reasons').innerHTML=`<b>추천 근거 상세 설명</b><br><br>${longExplain(r)}<br><a href='${r.links?.analysis||'#'}' target='_blank'>리포트 원문(Analysis)</a> · <a href='${r.links?.news||'#'}' target='_blank'>관련 뉴스</a>`;})();</script></body></html>

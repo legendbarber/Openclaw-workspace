@@ -99,6 +99,9 @@ function expectedHorizon(ttlTradingDays){
   if(d<=7) return `단기~스윙(약 ${d}거래일 이내)`;
   return `스윙(약 ${d}거래일 이내)`;
 }
+function detailLink(symbol){
+  return `<a href='/invest-recommend/symbol/${encodeURIComponent(symbol)}' title='추천근거 상세'>🔎 근거 상세</a>`;
+}
 function recommendationWhy(r, mode='risk'){
   const c = r?.components || {};
   const m = c.momentum || {};
@@ -291,6 +294,7 @@ async function loadData(){
 
   document.getElementById('top').innerHTML = `
     <div class='big'>Top Pick: ${x.symbol} (${x.name})</div>
+    <div>${detailLink(x.symbol)}</div>
     <div>카테고리: ${x.category} / 종합점수: <b>${fmt(x.score)}</b></div>
     <div>현재가: ${fmt(x.currentPrice)}</div>
     <div><b>상품 설명:</b> ${productDesc(x.symbol, x.name, x.category)}</div>
@@ -301,7 +305,7 @@ async function loadData(){
     <div><b>예상 손실률:</b> ${fmtPct(topLossPct)} / <b>예상 수익률:</b> 1차 ${fmtPct(topProfit1Pct)} · 2차 ${fmtPct(topProfit2Pct)}</div>
     <div><b>수익률 평가 시점:</b> 목표가 도달 시점 기준 (${expectedHorizon(x.plan.ttlTradingDays)})</div>
     <div>유효기간: ${x.plan.ttlTradingDays}거래일</div>
-    <div style='margin-top:8px'><b>추천 근거:</b><br>${recommendationWhy(x, 'risk')}</div>
+    <div style='margin-top:8px'><b>추천 근거 요약:</b> 기술/리포트/리스크/뉴스 점수 조합 기반 · ${detailLink(x.symbol)}</div>
     <div style='margin-top:10px;margin-bottom:10px'>
       <b>미니 차트 (3개월)</b><br>
       <div id='mini-top' style='height:190px;min-height:190px;margin-top:6px;background:#0f172a;border:1px solid #24304f;border-radius:8px;padding:4px;box-sizing:border-box;overflow:hidden;'></div>
@@ -324,7 +328,7 @@ async function loadData(){
     const profitPct = pctFrom(r.currentPrice, r.plan.takeProfit1);
     return `
     <div class='card'>
-      <b>#${idx+1} ${r.symbol} (${r.name})</b><br>
+      <b>#${idx+1} ${r.symbol} (${r.name})</b> · ${detailLink(r.symbol)}<br>
       점수: ${fmt(r.score)} / 현재가: ${fmt(r.currentPrice)}<br>
       <b>설명:</b> ${productDesc(r.symbol, r.name, r.category)}<br>
       진입: ${fmt(r.plan.entryZone[0])}~${fmt(r.plan.entryZone[1])}<br>
@@ -333,7 +337,7 @@ async function loadData(){
       <b>RR(기대수익/위험):</b> ${fmt(r.riskReward || (profitPct && lossPct ? (profitPct/Math.abs(lossPct)) : null))}<br>
       <b>수익률 평가 시점:</b> ${expectedHorizon(r.plan.ttlTradingDays)}<br>
       <b>미니 차트 (3개월):</b><br><div id='risk-mini-${idx}' style='height:190px;min-height:190px;margin-top:6px;background:#0f172a;border:1px solid #24304f;border-radius:8px;padding:4px;box-sizing:border-box;overflow:hidden;'></div><br>
-      <b>추천 근거:</b> ${recommendationWhy(r, 'risk')}
+      <b>추천 근거:</b> 요약만 표시 · ${detailLink(r.symbol)}
     </div>
   `}).join('');
 
@@ -344,7 +348,7 @@ async function loadData(){
     const profitPct = pctFrom(r.currentPrice, r.plan.takeProfit1);
     return `
     <div class='card'>
-      <b>#${idx+1} ${r.symbol} (${r.name})</b><br>
+      <b>#${idx+1} ${r.symbol} (${r.name})</b> · ${detailLink(r.symbol)}<br>
       점수: ${fmt(r.score)} / 현재가: ${fmt(r.currentPrice)}<br>
       <b>설명:</b> ${productDesc(r.symbol, r.name, r.category)}<br>
       진입: ${fmt(r.plan.entryZone[0])}~${fmt(r.plan.entryZone[1])}<br>
@@ -353,7 +357,7 @@ async function loadData(){
       <b>RR(기대수익/위험):</b> ${fmt(r.riskReward || (profitPct && lossPct ? (profitPct/Math.abs(lossPct)) : null))}<br>
       <b>수익률 평가 시점:</b> ${expectedHorizon(r.plan.ttlTradingDays)}<br>
       <b>미니 차트 (3개월):</b><br><div id='ret-mini-${idx}' style='height:190px;min-height:190px;margin-top:6px;background:#0f172a;border:1px solid #24304f;border-radius:8px;padding:4px;box-sizing:border-box;overflow:hidden;'></div><br>
-      <b>추천 근거:</b> ${recommendationWhy(r, 'return')}
+      <b>추천 근거:</b> 요약만 표시 · ${detailLink(r.symbol)}
     </div>
   `}).join('');
 

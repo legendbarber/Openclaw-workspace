@@ -173,6 +173,11 @@ def invest_history_assets(filename):
     return send_from_directory(f"{app.static_folder}/invest-history", filename)
 
 
+@app.get('/invest-recommend/symbol/<symbol>')
+def invest_symbol_detail_page(symbol: str):
+    return send_from_directory(app.static_folder, 'symbol-detail.html')
+
+
 @app.get('/invest-recommend/ui-candidates')
 def invest_ui_candidates_index():
     return send_from_directory(f"{app.static_folder}/ui-candidates", 'index.html')
