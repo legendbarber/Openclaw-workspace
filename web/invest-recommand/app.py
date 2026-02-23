@@ -28,7 +28,7 @@ KST = ZoneInfo("Asia/Seoul")
 TEMA_WEB_V2_ORIGIN = "http://127.0.0.1:3010"
 
 # lightweight in-memory cache for faster UI response
-_REPORT_CACHE = {"ts": 0.0, "data": None}
+_REPORT_CACHE = {}
 _REPORT_TTL_SEC = 60
 _CHART_CACHE = {}
 _CHART_TTL_SEC = 300
@@ -54,13 +54,17 @@ threading.Thread(target=_snapshot_worker, daemon=True).start()
 
 @app.get('/api/report')
 def api_report():
-    now = time.time()
-    if _REPORT_CACHE["data"] is not None and (now - _REPORT_CACHE["ts"] <= _REPORT_TTL_SEC):
-        return jsonify(_REPORT_CACHE["data"])
+    market = (request.args.get('market', default='all', type=str) or 'all').lower()
+    if market not in {'all', 'kr', 'us'}:
+        market = 'all'
 
-    data = build_report()
-    _REPORT_CACHE["data"] = data
-    _REPORT_CACHE["ts"] = now
+    now = time.time()
+    cached = _REPORT_CACHE.get(market)
+    if cached and (now - cached.get('ts', 0) <= _REPORT_TTL_SEC):
+        return jsonify(cached['data'])
+
+    data = build_report(market=market)
+    _REPORT_CACHE[market] = {"ts": now, "data": data}
     return jsonify(data)
 
 
@@ -142,7 +146,8 @@ def home():
       <h2>legendbarber Web Hub</h2>
       <p>이 주소를 앞으로 모든 웹서버의 메인 허브로 사용합니다.</p>
       <ul>
-        <li><a style='color:#93c5fd' href='/invest-recommend'>/invest-recommend</a> (투자 추천)</li>
+        <li><a style='color:#93c5fd' href='/invest-recommend'>/invest-recommend</a> (투자 추천: KR+US)</li>
+        <li><a style='color:#93c5fd' href='/invest-recommend-us'>/invest-recommend-us</a> (미국주식 추천)</li>
         <li><a style='color:#93c5fd' href='/invest-history'>/invest-history</a> (추천 히스토리 캘린더)</li>
         <li><a style='color:#93c5fd' href='/tema-web-v2'>/tema-web-v2</a> (테마주 업그레이드 v2)</li>
         <li><a style='color:#93c5fd' href='/theme-leaders'>/theme-leaders</a> (당일 주도테마/주도주 탐색)</li>
@@ -161,6 +166,16 @@ def home():
 @app.get('/invest-recommend')
 def invest_recommend_page():
     return send_from_directory(app.static_folder, 'index.html')
+
+
+@app.get('/invest-recommend-us')
+def invest_recommend_us_page():
+    return redirect('/invest-recommend?market=us', code=302)
+
+
+@app.get('/invest-recommend-kr')
+def invest_recommend_kr_page():
+    return redirect('/invest-recommend?market=kr', code=302)
 
 
 @app.get('/invest-recommend/history')

@@ -365,7 +365,7 @@ def _is_etf_like(row: Dict) -> bool:
     return symbol in {"SPY", "QQQ", "EEM", "EFA", "VNQ", "TLT", "IEF", "LQD", "GLD", "SLV", "USO", "DBC"}
 
 
-def build_report() -> Dict:
+def build_report(market: str = "all") -> Dict:
     rows = []
     failed = []
     for a in UNIVERSE:
@@ -377,6 +377,12 @@ def build_report() -> Dict:
 
     # 사용자 요청: ETF 제외 (단일 주식만 허용)
     rows = [r for r in rows if not _is_etf_like(r)]
+
+    mk = (market or "all").strip().lower()
+    if mk == "us":
+        rows = [r for r in rows if str(r.get("category", "")).startswith("us-")]
+    elif mk == "kr":
+        rows = [r for r in rows if str(r.get("category", "")).startswith("kr-")]
 
     rows.sort(key=lambda x: x["score"], reverse=True)
 
@@ -414,9 +420,12 @@ def build_report() -> Dict:
             no_trade = True
             no_trade_reason = "변동성 과열(초고변동) 구간으로 진입 보류 권장"
 
+    market_label = {"all": "KR+US", "kr": "KR", "us": "US"}.get(mk, "KR+US")
+
     report = {
         "generatedAt": datetime.now(UTC).isoformat().replace("+00:00", "Z"),
-        "model": "KR/US Single-Stock Dual Ranking v5 (No Momentum + Technical)",
+        "model": f"{market_label} Single-Stock Dual Ranking v5 (No Momentum + Technical)",
+        "market": mk,
         "methodology": "S=0.35R+0.25C+0.15L+0.10V+0.15T + Dual Rank(RR/Return)",
         "topPick": top,
         "rankings": rows,

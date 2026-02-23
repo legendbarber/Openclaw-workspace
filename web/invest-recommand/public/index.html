@@ -29,11 +29,11 @@
   <div class="wrap">
     <div class="topbar">
       <div>
-        <h1 style="margin:0">Invest Recommand · Trading Desk</h1>
-        <div class="muted">Desk View: Top pick, execution plan, rankings, indicators</div>
+        <h1 id="pageTitle" style="margin:0">Invest Recommand · Trading Desk</h1>
+        <div id="pageSubtitle" class="muted">Desk View: Top pick, execution plan, rankings, indicators</div>
       </div>
       <div style="display:flex;gap:8px;align-items:center">
-        <span class="badge">LIVE SCANNER</span>
+        <span id="marketBadge" class="badge">LIVE SCANNER</span>
         <button onclick="loadData()">새로 조회</button>
       </div>
     </div>
@@ -56,6 +56,21 @@
 
 <script>
 function fmt(v,d=2){return (v===null||v===undefined)?'-':Number(v).toLocaleString(undefined,{maximumFractionDigits:d});}
+function getMarket(){
+  const m = new URLSearchParams(location.search).get('market');
+  return (m==='us'||m==='kr') ? m : 'all';
+}
+function marketText(m){
+  if(m==='us') return 'US';
+  if(m==='kr') return 'KR';
+  return 'KR+US';
+}
+function setMarketHeader(){
+  const m = getMarket();
+  document.getElementById('marketBadge').textContent = `LIVE SCANNER · ${marketText(m)}`;
+  document.getElementById('pageTitle').textContent = `Invest Recommand · Trading Desk (${marketText(m)})`;
+  document.getElementById('pageSubtitle').textContent = m==='us' ? '미국주식 추천 전용 뷰' : (m==='kr' ? '한국주식 추천 전용 뷰' : 'KR+US 통합 추천 뷰');
+}
 function setLoading(on){
   const el=document.getElementById('topLoader');
   if(!el) return;
@@ -253,7 +268,8 @@ async function renderMiniChart(symbol, elId){
 }
 
 async function loadData(){
-  const d = await apiGet(`/api/report?t=${Date.now()}`);
+  const market = getMarket();
+  const d = await apiGet(`/api/report?market=${market}&t=${Date.now()}`);
 
   document.getElementById('meta').innerHTML = `
     <b>생성시각:</b> ${new Date(d.generatedAt).toLocaleString()}<br>
@@ -400,6 +416,7 @@ async function loadData(){
   `;
 }
 
+setMarketHeader();
 loadData();
 </script>
 </body>
