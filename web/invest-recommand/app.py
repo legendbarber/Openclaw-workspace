@@ -148,7 +148,6 @@ def home():
       <ul>
         <li><a style='color:#93c5fd' href='/invest-recommend'>/invest-recommend</a> (투자 추천: KR+US)</li>
         <li><a style='color:#93c5fd' href='/invest-recommend-us'>/invest-recommend-us</a> (미국주식 추천)</li>
-        <li><a style='color:#93c5fd' href='/invest-history'>/invest-history</a> (추천 히스토리 캘린더)</li>
         <li><a style='color:#93c5fd' href='/tema-web-v2'>/tema-web-v2</a> (테마주 업그레이드 v2)</li>
         <li><a style='color:#93c5fd' href='/theme-leaders'>/theme-leaders</a> (당일 주도테마/주도주 탐색)</li>
         <li><a style='color:#93c5fd' href='/theme-now-kr'>/theme-now-kr</a> (한국주식 테마 실시간 스코어보드)</li>
