@@ -145,12 +145,23 @@ def home():
     <html><body style='font-family:Arial;padding:24px;background:#0b1220;color:#e5e7eb'>
       <h2>legendbarber Web Hub</h2>
       <p>이 주소를 앞으로 모든 웹서버의 메인 허브로 사용합니다.</p>
+
+      <h3 style='margin-top:22px'>📁 /invest-recommend</h3>
       <ul>
         <li><a style='color:#93c5fd' href='/invest-recommend'>/invest-recommend</a> (투자 추천: KR+US)</li>
         <li><a style='color:#93c5fd' href='/invest-recommend-us'>/invest-recommend-us</a> (미국주식 추천)</li>
+        <li><a style='color:#93c5fd' href='/invest-recommend-kr'>/invest-recommend-kr</a> (한국주식 추천)</li>
+      </ul>
+
+      <h3 style='margin-top:22px'>📁 /theme</h3>
+      <ul>
         <li><a style='color:#93c5fd' href='/tema-web-v2'>/tema-web-v2</a> (테마주 업그레이드 v2)</li>
         <li><a style='color:#93c5fd' href='/theme-leaders'>/theme-leaders</a> (당일 주도테마/주도주 탐색)</li>
         <li><a style='color:#93c5fd' href='/theme-now-kr'>/theme-now-kr</a> (한국주식 테마 실시간 스코어보드)</li>
+      </ul>
+
+      <h3 style='margin-top:22px'>📁 /game</h3>
+      <ul>
         <li><a style='color:#93c5fd' href='/game-demo'>/game-demo</a> (스와이프 게임 데모 v1)</li>
         <li><a style='color:#93c5fd' href='/game-demo-v2'>/game-demo-v2</a> (퍼즐 머지 데모 v2)</li>
         <li><a style='color:#93c5fd' href='/game-foldlight'>/game-foldlight</a> (독창 퍼즐 Foldlight 프로토)</li>
