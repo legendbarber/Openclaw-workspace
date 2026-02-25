@@ -233,12 +233,11 @@ def _consensus_from_naver_or_hk(symbol: str) -> Dict:
         mean = float(np.mean(rec_scores)) if rec_scores else None
 
         score = 50.0
-        if up is not None:
-            score += float(np.clip(up / 2.5, -20, 25))
+        # 업사이드는 점수에서 제외: 투자의견 방향 + 표본 수(최근 1개월)만 반영
         if isinstance(mean, (int, float)):
             # 매수 우위(recommendationMean 낮을수록) 가중 강화
             score += float(np.clip((3.2 - mean) * 15, -20, 30))
-        # 표본 수 가중 강화
+        # 표본 수 가중 강화 (최근 1개월 + 증권사 중복제거 후 개수)
         score += float(np.clip(len(targets) * 3.0, 0, 20))
 
         return {
@@ -276,8 +275,7 @@ def _consensus_from_yfinance(symbol: str) -> Dict:
             up = (target / cur - 1) * 100
 
         score = 50.0
-        if up is not None:
-            score += float(np.clip(up / 2.5, -20, 25))
+        # 업사이드는 점수에서 제외: 투자의견 방향 + 표본 수만 반영
         if isinstance(mean, (int, float)):
             # 매수 우위(recommendationMean 낮을수록) 가중 강화
             score += float(np.clip((3.2 - mean) * 15, -20, 30))
@@ -629,7 +627,7 @@ def build_report(market: str = "all", progress_cb=None) -> Dict:
         "generatedAt": datetime.now(UTC).isoformat().replace("+00:00", "Z"),
         "model": f"{market_label} Single-Stock Dual Ranking v5 (No Momentum + Technical)",
         "market": mk,
-        "methodology": "S=0.60R+0.20C+0.20T (R: ReportConsensus / C: CrowdNews / T: Technical)",
+        "methodology": "S=0.60R+0.20C+0.20T (R: OpinionDirection+SampleCount / C: CrowdNews / T: Technical)",
         "topPick": top,
         "rankings": rows,
         "riskAdjustedRankings": risk_adjusted,
