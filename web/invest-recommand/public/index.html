@@ -331,11 +331,11 @@ async function loadData(){
     </div>
   `;
 
-  const scoreTop5 = (d.rankings || []).slice(0,5);
+  const scoreTop10 = (d.rankings || []).slice(0,10);
 
   document.getElementById('scoreTop5').innerHTML = `
-    <div class='card' style='grid-column:1/-1'><b>📌 종합점수 상위 5 (점수순)</b></div>
-  ` + scoreTop5.map((r, idx) => {
+    <div class='card' style='grid-column:1/-1'><b>📌 종합점수 상위 10 (점수순)</b></div>
+  ` + scoreTop10.map((r, idx) => {
     const lossPct = pctFrom(r.currentPrice, r.plan.stopLoss);
     const profitPct = pctFrom(r.currentPrice, r.plan.takeProfit1);
     return `
@@ -354,8 +354,8 @@ async function loadData(){
   `}).join('');
 
   await renderMiniChart(x.symbol, 'mini-top');
-  for(let i=0;i<scoreTop5.length;i++){
-    await renderMiniChart(scoreTop5[i].symbol, `score-mini-${i}`);
+  for(let i=0;i<scoreTop10.length;i++){
+    await renderMiniChart(scoreTop10[i].symbol, `score-mini-${i}`);
   }
 
   const c = x.components;
@@ -368,9 +368,9 @@ async function loadData(){
       추천지수: ${fmt(c.reportConsensus.recommendationMean)} / 의견수: ${fmt(c.reportConsensus.analystOpinions,0)} / 소스: ${c.reportConsensus.source || '-'}
     </div>
     <div class='card'>
-      <b>T) 기술적 분석(차트/가격+남은자리)</b><br>
+      <b>T) 기술적 분석(차트/가격)</b><br>
       점수: ${fmt(c.technical?.score)} / 셋업: ${c.technical?.setup||'-'}<br>
-      RSI(14): ${fmt(c.technical?.rsi14)} / MA20 이격: ${fmt(c.technical?.distMa20Pct)}% / 20일 고점대비: ${fmt(c.technical?.from20dHighPct)}% / 목표가 기준 남은자리: ${fmtPct(c.technical?.headroomPct)}
+      RSI(14): ${fmt(c.technical?.rsi14)} / MA20 이격: ${fmt(c.technical?.distMa20Pct)}% / 20일 고점대비: ${fmt(c.technical?.from20dHighPct)}%
     </div>
   `;
 }

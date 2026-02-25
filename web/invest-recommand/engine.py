@@ -354,9 +354,7 @@ def _risk_score(s: pd.Series) -> Dict:
 
 
 def _technical_score(s: pd.Series, target_price: float | None = None) -> Dict:
-    """가격/차트 기반 기술적 진입 타이밍 점수 (모멘텀과 분리).
-    target_price가 있으면 '추가 상승 여력(headroom)'도 반영한다.
-    """
+    """가격/차트 기반 기술적 진입 타이밍 점수 (모멘텀과 분리)."""
     close = s.astype(float)
     cur = float(close.iloc[-1])
 
@@ -420,21 +418,7 @@ def _technical_score(s: pd.Series, target_price: float | None = None) -> Dict:
     elif from_high20 < -18:
         score -= 10
 
-    # 5) 목표주가 기준 남은 자리(headroom) 반영
-    #    너무 여력이 작으면(이미 많이 오른 구간) 감점, 적정 여력은 가점
     headroom_pct = None
-    if isinstance(target_price, (int, float)) and target_price > 0:
-        headroom_pct = (target_price / cur - 1) * 100
-        if headroom_pct < 4:
-            score -= 14
-        elif headroom_pct < 8:
-            score -= 6
-        elif headroom_pct <= 20:
-            score += 8
-        elif headroom_pct <= 35:
-            score += 12
-        else:
-            score += 6
 
     score = float(np.clip(score, 0, 100))
 
@@ -591,7 +575,7 @@ def build_report(market: str = "all") -> Dict:
         "generatedAt": datetime.now(UTC).isoformat().replace("+00:00", "Z"),
         "model": f"{market_label} Single-Stock Dual Ranking v5 (No Momentum + Technical)",
         "market": mk,
-        "methodology": "S=0.70R+0.30T (R: ReportConsensus / T: Technical+Headroom)",
+        "methodology": "S=0.70R+0.30T (R: ReportConsensus / T: Technical)",
         "topPick": top,
         "rankings": rows,
         "riskAdjustedRankings": risk_adjusted,
