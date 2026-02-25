@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import re
+import time
 import urllib.parse
 import urllib.request
 from dataclasses import dataclass
@@ -86,32 +87,99 @@ def _mdd(s: pd.Series) -> float:
     return float(dd.min())
 
 
-def _consensus(symbol: str) -> Dict:
+_CONS_CACHE: Dict[str, Dict] = {}
+_CONS_TTL_SEC = 60 * 60 * 6  # 6h
+
+
+def _safe_fetch_text(url: str, encoding: str = "utf-8") -> str:
+    req = urllib.request.Request(url, headers={"User-Agent": "Mozilla/5.0"})
+    raw = urllib.request.urlopen(req, timeout=2.5).read()
+    return raw.decode(encoding, "ignore")
+
+
+def _recommendation_to_score(rec: str | None) -> float | None:
+    if not rec:
+        return None
+    r = rec.strip().lower()
+    if "strong buy" in r:
+        return 1.0
+    if "buy" in r:
+        return 2.0
+    if "hold" in r or "neutral" in r:
+        return 3.0
+    if "sell" in r:
+        return 4.0
+    return None
+
+
+def _consensus_from_naver_or_hk(symbol: str) -> Dict:
+    """KR 종목은 네이버 증권 리서치 보고서에서 최근 목표주가 평균을 계산한다.
+    (요청사항: yfinance 컨센서스 미사용)
+    """
+    code_match = re.match(r"^(\d{6})\.(KS|KQ)$", symbol or "")
+    if not code_match:
+        return {
+            "targetMeanPrice": None,
+            "upsidePct": None,
+            "recommendationMean": None,
+            "recommendationKey": None,
+            "analystOpinions": 0,
+            "source": "naver_research",
+            "score": 50.0,
+        }
+
+    code = code_match.group(1)
+    list_url = f"https://finance.naver.com/research/company_list.naver?searchType=itemCode&itemCode={code}&page=1"
+
     try:
-        info = yf.Ticker(symbol).info or {}
-        cur = info.get("currentPrice")
-        target = info.get("targetMeanPrice")
-        mean = info.get("recommendationMean")
-        key = info.get("recommendationKey")
-        n = info.get("numberOfAnalystOpinions")
-        up = None
-        if cur and target:
-            up = (target / cur - 1) * 100
+        html = _safe_fetch_text(list_url, encoding="euc-kr")
+        nids = re.findall(r"company_read\.naver\?nid=(\d+)&page=1&searchType=itemCode&itemCode=" + re.escape(code), html)
+        nids = list(dict.fromkeys(nids))[:1]
+
+        targets = []
+        recs = []
+        for nid in nids:
+            try:
+                read_url = f"https://finance.naver.com/research/company_read.naver?nid={nid}&page=1&searchType=itemCode&itemCode={code}"
+                body = _safe_fetch_text(read_url, encoding="euc-kr")
+                m_price = re.search(r'class="money"><strong>([\d,]+)</strong>', body)
+                if m_price:
+                    targets.append(float(m_price.group(1).replace(",", "")))
+                m_rec = re.search(r'class="coment">([^<]+)</em>', body)
+                if m_rec:
+                    recs.append(m_rec.group(1).strip())
+            except Exception:
+                continue
+
+        cur = None
+        try:
+            fi = yf.Ticker(symbol).fast_info or {}
+            cur = fi.get("lastPrice") or fi.get("regularMarketPrice")
+            if cur is not None:
+                cur = float(cur)
+        except Exception:
+            cur = None
+
+        target = float(np.mean(targets)) if targets else None
+        up = ((target / cur - 1) * 100) if (target and cur) else None
+
+        rec_scores = [x for x in (_recommendation_to_score(r) for r in recs) if isinstance(x, (int, float))]
+        mean = float(np.mean(rec_scores)) if rec_scores else None
 
         score = 50.0
         if up is not None:
             score += float(np.clip(up / 2.5, -20, 30))
         if isinstance(mean, (int, float)):
             score += float(np.clip((3.0 - mean) * 10, -20, 20))
-        if isinstance(n, (int, float)):
-            score += float(np.clip(n / 2, 0, 10))
+        score += float(np.clip(len(targets) / 2, 0, 10))
 
         return {
-            "targetMeanPrice": target,
+            "targetMeanPrice": None if target is None else round(target, 2),
             "upsidePct": None if up is None else round(float(up), 2),
-            "recommendationMean": mean,
-            "recommendationKey": key,
-            "analystOpinions": n,
+            "recommendationMean": None if mean is None else round(float(mean), 2),
+            "recommendationKey": None,
+            "analystOpinions": len(targets),
+            "source": "naver_research",
             "score": round(float(np.clip(score, 0, 100)), 2),
         }
     except Exception:
@@ -120,9 +188,21 @@ def _consensus(symbol: str) -> Dict:
             "upsidePct": None,
             "recommendationMean": None,
             "recommendationKey": None,
-            "analystOpinions": None,
+            "analystOpinions": 0,
+            "source": "naver_research",
             "score": 50.0,
         }
+
+
+def _consensus(symbol: str) -> Dict:
+    now = time.time()
+    cached = _CONS_CACHE.get(symbol)
+    if cached and (now - cached.get("ts", 0) < _CONS_TTL_SEC):
+        return cached["data"]
+
+    data = _consensus_from_naver_or_hk(symbol)
+    _CONS_CACHE[symbol] = {"ts": now, "data": data}
+    return data
 
 
 def _news(symbol: str, name: str, limit: int = 8) -> Dict:
@@ -297,13 +377,10 @@ def evaluate_asset(asset: Asset) -> Dict | None:
     risk = _risk_score(s)
     technical = _technical_score(s)
 
-    # 사용자 요청 반영: 모멘텀 제외 + 기술적 분석(차트/가격) 반영
+    # 사용자 요청 반영: reportConsensus + technical만 사용 (7:3)
     score = (
-        0.35 * report_consensus["score"] +
-        0.25 * crowd["score"] +
-        0.15 * liquidity +
-        0.10 * risk["score"] +
-        0.15 * technical["score"]
+        0.70 * report_consensus["score"] +
+        0.30 * technical["score"]
     )
 
     cur = float(s.iloc[-1])
@@ -368,7 +445,15 @@ def _is_etf_like(row: Dict) -> bool:
 def build_report(market: str = "all") -> Dict:
     rows = []
     failed = []
-    for a in UNIVERSE:
+
+    mk = (market or "all").strip().lower()
+    assets = UNIVERSE
+    if mk == "us":
+        assets = [a for a in UNIVERSE if a.category.startswith("us-")]
+    elif mk == "kr":
+        assets = [a for a in UNIVERSE if a.category.startswith("kr-")]
+
+    for a in assets:
         r = evaluate_asset(a)
         if r is None:
             failed.append(a.symbol)
@@ -377,12 +462,6 @@ def build_report(market: str = "all") -> Dict:
 
     # 사용자 요청: ETF 제외 (단일 주식만 허용)
     rows = [r for r in rows if not _is_etf_like(r)]
-
-    mk = (market or "all").strip().lower()
-    if mk == "us":
-        rows = [r for r in rows if str(r.get("category", "")).startswith("us-")]
-    elif mk == "kr":
-        rows = [r for r in rows if str(r.get("category", "")).startswith("kr-")]
 
     rows.sort(key=lambda x: x["score"], reverse=True)
 
@@ -426,7 +505,7 @@ def build_report(market: str = "all") -> Dict:
         "generatedAt": datetime.now(UTC).isoformat().replace("+00:00", "Z"),
         "model": f"{market_label} Single-Stock Dual Ranking v5 (No Momentum + Technical)",
         "market": mk,
-        "methodology": "S=0.35R+0.25C+0.15L+0.10V+0.15T + Dual Rank(RR/Return)",
+        "methodology": "S=0.70R+0.30T (R: ReportConsensus from Naver Research / T: Technical) + Dual Rank(RR/Return)",
         "topPick": top,
         "rankings": rows,
         "riskAdjustedRankings": risk_adjusted,
