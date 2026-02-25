@@ -405,6 +405,54 @@ def _consensus(symbol: str) -> Dict:
     return data
 
 
+def _to_theme_label(symbol: str, name: str, sector: str | None, industry: str | None) -> str:
+    s = (sector or "").lower()
+    i = (industry or "").lower()
+    n = (name or "")
+    sym = (symbol or "").upper()
+
+    # KR keyword mapping (직관형)
+    kr_rules = [
+        (lambda: any(k in n for k in ["반도체", "하이닉스", "삼성전자", "한미반도체", "리노공업", "이오테크닉스"]), "반도체"),
+        (lambda: any(k in n for k in ["2차전지", "배터리", "에코프로", "포스코퓨처엠", "엘앤에프", "삼성sdi", "lg에너지솔루션"]), "2차전지"),
+        (lambda: any(k in n for k in ["자동차", "현대차", "기아", "모비스", "만도", "한온시스템"]), "자동차/부품"),
+        (lambda: any(k in n for k in ["방산", "한화에어로", "lignex1", "lig넥스원", "현대로템", "한국항공우주"]), "방산/우주"),
+        (lambda: any(k in n for k in ["조선", "현대중공업", "한화오션", "삼성중공업"]), "조선/해양"),
+        (lambda: any(k in n for k in ["전력", "변압기", "효성중공업", "ls electric", "일렉트릭"]), "전력기기/인프라"),
+        (lambda: any(k in n for k in ["바이오", "제약", "셀트리온", "삼성바이오", "유한양행", "한미약품"]), "바이오/헬스케어"),
+        (lambda: any(k in n for k in ["인터넷", "플랫폼", "네이버", "카카오"]), "인터넷/플랫폼"),
+        (lambda: any(k in n for k in ["은행", "금융", "신한", "kb", "하나금융", "우리금융"]), "은행/금융"),
+    ]
+    for cond, label in kr_rules:
+        try:
+            if cond():
+                return label
+        except Exception:
+            pass
+
+    # Global mapping
+    if "semiconductor" in s or "semiconductor" in i:
+        return "반도체"
+    if "software" in s or "internet" in s or "interactive media" in i:
+        return "인터넷/소프트웨어"
+    if "banks" in i or "financial" in s:
+        return "은행/금융"
+    if "oil" in i or "gas" in i or "energy" in s:
+        return "에너지"
+    if "aerospace" in i or "defense" in i:
+        return "방산/우주"
+    if "auto" in i or "autom" in i:
+        return "자동차/부품"
+    if "biotech" in i or "pharma" in i or "health" in s:
+        return "바이오/헬스케어"
+    if "utility" in s or "electrical" in i or "power" in i:
+        return "전력/유틸리티"
+
+    if sector and industry:
+        return f"{sector} > {industry}"
+    return sector or industry or "UNKNOWN"
+
+
 def _get_symbol_theme_meta(symbol: str) -> Dict:
     sym = (symbol or "").upper()
     if sym in _THEME_META_CACHE:
@@ -416,15 +464,7 @@ def _get_symbol_theme_meta(symbol: str) -> Dict:
         sector = (info.get("sector") or "").strip()
         industry = (info.get("industry") or "").strip()
 
-        if sector and industry:
-            theme = f"{sector} > {industry}"
-        elif sector:
-            theme = sector
-        elif industry:
-            theme = industry
-        else:
-            theme = "UNKNOWN"
-
+        theme = _to_theme_label(sym, "", sector, industry)
         out = {"theme": theme, "sector": sector or None, "industry": industry or None}
     except Exception:
         pass
@@ -440,9 +480,12 @@ def _apply_runtime_theme_scores(rows: List[Dict]) -> List[Dict]:
 
     # 1) 각 종목 theme 메타 부착
     for r in rows:
-        meta = _get_symbol_theme_meta(r.get("symbol"))
+        sym = r.get("symbol")
+        nm = r.get("name", "")
+        meta = _get_symbol_theme_meta(sym)
+        theme_label = _to_theme_label(sym, nm, meta.get("sector"), meta.get("industry"))
         r.setdefault("components", {})["theme"] = {
-            "theme": meta.get("theme"),
+            "theme": theme_label,
             "sector": meta.get("sector"),
             "industry": meta.get("industry"),
             "themeScore": 50.0,
