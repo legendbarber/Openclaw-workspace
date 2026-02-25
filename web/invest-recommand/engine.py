@@ -142,6 +142,19 @@ def _recommendation_to_score(rec: str | None) -> float | None:
     return None
 
 
+def _recommendation_bucket(rec: str | None) -> str | None:
+    if not rec:
+        return None
+    r = rec.strip().lower()
+    if "strong buy" in r or ("buy" in r and "sell" not in r):
+        return "buy"
+    if "hold" in r or "neutral" in r:
+        return "hold"
+    if "sell" in r:
+        return "sell"
+    return None
+
+
 def _consensus_from_naver_or_hk(symbol: str) -> Dict:
     """KR 종목은 네이버 증권 리서치 보고서에서 최근 목표주가 평균을 계산한다.
     (요청사항: yfinance 컨센서스 미사용)
@@ -154,6 +167,7 @@ def _consensus_from_naver_or_hk(symbol: str) -> Dict:
             "recommendationMean": None,
             "recommendationKey": None,
             "analystOpinions": 0,
+            "opinionDistribution": {"buy": 0, "hold": 0, "sell": 0},
             "source": "naver_research",
             "score": 50.0,
         }
@@ -232,11 +246,22 @@ def _consensus_from_naver_or_hk(symbol: str) -> Dict:
         rec_scores = [x for x in (_recommendation_to_score(r) for r in recs) if isinstance(x, (int, float))]
         mean = float(np.mean(rec_scores)) if rec_scores else None
 
+        b = {"buy": 0, "hold": 0, "sell": 0}
+        for r in recs:
+            k = _recommendation_bucket(r)
+            if k:
+                b[k] += 1
+        total_op = max(1, sum(b.values()))
+        buy_ratio = b["buy"] / total_op
+        sell_ratio = b["sell"] / total_op
+
         score = 50.0
         # 업사이드는 점수에서 제외: 투자의견 방향 + 표본 수(최근 1개월)만 반영
         if isinstance(mean, (int, float)):
             # 매수 우위(recommendationMean 낮을수록) 가중 강화
-            score += float(np.clip((3.2 - mean) * 15, -20, 30))
+            score += float(np.clip((3.2 - mean) * 10, -15, 20))
+        # 투자의견 분포 반영(매수비율↑, 매도비율↓)
+        score += float(np.clip((buy_ratio - sell_ratio) * 25, -15, 25))
         # 표본 수 가중 강화 (최근 1개월 + 증권사 중복제거 후 개수)
         score += float(np.clip(len(targets) * 3.0, 0, 20))
 
@@ -246,6 +271,7 @@ def _consensus_from_naver_or_hk(symbol: str) -> Dict:
             "recommendationMean": None if mean is None else round(float(mean), 2),
             "recommendationKey": None,
             "analystOpinions": len(targets),
+            "opinionDistribution": b,
             "source": "naver_research",
             "score": round(float(np.clip(score, 0, 100)), 2),
         }
@@ -256,6 +282,7 @@ def _consensus_from_naver_or_hk(symbol: str) -> Dict:
             "recommendationMean": None,
             "recommendationKey": None,
             "analystOpinions": 0,
+            "opinionDistribution": {"buy": 0, "hold": 0, "sell": 0},
             "source": "naver_research",
             "score": 50.0,
         }
@@ -274,11 +301,20 @@ def _consensus_from_yfinance(symbol: str) -> Dict:
         if cur and target:
             up = (target / cur - 1) * 100
 
+        b = {"buy": 0, "hold": 0, "sell": 0}
+        k = _recommendation_bucket(key)
+        if k:
+            b[k] = 1
+
         score = 50.0
         # 업사이드는 점수에서 제외: 투자의견 방향 + 표본 수만 반영
         if isinstance(mean, (int, float)):
-            # 매수 우위(recommendationMean 낮을수록) 가중 강화
-            score += float(np.clip((3.2 - mean) * 15, -20, 30))
+            score += float(np.clip((3.2 - mean) * 10, -15, 20))
+
+        buy_ratio = 1.0 if b["buy"] else 0.0
+        sell_ratio = 1.0 if b["sell"] else 0.0
+        score += float(np.clip((buy_ratio - sell_ratio) * 10, -10, 10))
+
         if isinstance(n, (int, float)):
             # 표본 수 가중 강화
             score += float(np.clip(n * 1.2, 0, 20))
@@ -289,6 +325,7 @@ def _consensus_from_yfinance(symbol: str) -> Dict:
             "recommendationMean": mean,
             "recommendationKey": key,
             "analystOpinions": n,
+            "opinionDistribution": b,
             "source": "yfinance",
             "score": round(float(np.clip(score, 0, 100)), 2),
         }
@@ -299,6 +336,7 @@ def _consensus_from_yfinance(symbol: str) -> Dict:
             "recommendationMean": None,
             "recommendationKey": None,
             "analystOpinions": None,
+            "opinionDistribution": {"buy": 0, "hold": 0, "sell": 0},
             "source": "yfinance",
             "score": 50.0,
         }
@@ -627,7 +665,7 @@ def build_report(market: str = "all", progress_cb=None) -> Dict:
         "generatedAt": datetime.now(UTC).isoformat().replace("+00:00", "Z"),
         "model": f"{market_label} Single-Stock Dual Ranking v5 (No Momentum + Technical)",
         "market": mk,
-        "methodology": "S=0.60R+0.20C+0.20T (R: OpinionDirection+SampleCount / C: CrowdNews / T: Technical)",
+        "methodology": "S=0.60R+0.20C+0.20T (R: OpinionDirection+OpinionDistribution+SampleCount / C: CrowdNews / T: Technical)",
         "topPick": top,
         "rankings": rows,
         "riskAdjustedRankings": risk_adjusted,
