@@ -194,13 +194,56 @@ def _consensus_from_naver_or_hk(symbol: str) -> Dict:
         }
 
 
+def _consensus_from_yfinance(symbol: str) -> Dict:
+    try:
+        info = yf.Ticker(symbol).info or {}
+        cur = info.get("currentPrice")
+        target = info.get("targetMeanPrice")
+        mean = info.get("recommendationMean")
+        key = info.get("recommendationKey")
+        n = info.get("numberOfAnalystOpinions")
+
+        up = None
+        if cur and target:
+            up = (target / cur - 1) * 100
+
+        score = 50.0
+        if up is not None:
+            score += float(np.clip(up / 2.5, -20, 30))
+        if isinstance(mean, (int, float)):
+            score += float(np.clip((3.0 - mean) * 10, -20, 20))
+        if isinstance(n, (int, float)):
+            score += float(np.clip(n / 2, 0, 10))
+
+        return {
+            "targetMeanPrice": target,
+            "upsidePct": None if up is None else round(float(up), 2),
+            "recommendationMean": mean,
+            "recommendationKey": key,
+            "analystOpinions": n,
+            "source": "yfinance",
+            "score": round(float(np.clip(score, 0, 100)), 2),
+        }
+    except Exception:
+        return {
+            "targetMeanPrice": None,
+            "upsidePct": None,
+            "recommendationMean": None,
+            "recommendationKey": None,
+            "analystOpinions": None,
+            "source": "yfinance",
+            "score": 50.0,
+        }
+
+
 def _consensus(symbol: str) -> Dict:
     now = time.time()
     cached = _CONS_CACHE.get(symbol)
     if cached and (now - cached.get("ts", 0) < _CONS_TTL_SEC):
         return cached["data"]
 
-    data = _consensus_from_naver_or_hk(symbol)
+    is_kr = bool(re.match(r"^(\d{6})\.(KS|KQ)$", symbol or ""))
+    data = _consensus_from_naver_or_hk(symbol) if is_kr else _consensus_from_yfinance(symbol)
     _CONS_CACHE[symbol] = {"ts": now, "data": data}
     return data
 
