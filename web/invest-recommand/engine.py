@@ -84,7 +84,7 @@ SNAPSHOT_DIR = Path(__file__).resolve().parent / "snapshots"
 KST = ZoneInfo("Asia/Seoul")
 POSITIVE = ["beat", "strong", "upgrade", "rally", "surge", "record", "gain"]
 NEGATIVE = ["miss", "downgrade", "drop", "fall", "weak", "risk", "lawsuit"]
-_THEME_CACHE = {"loaded": False, "map": {}}
+_THEME_META_CACHE: Dict[str, Dict] = {}
 
 
 def _download_close(symbol: str, period: str = "1y") -> pd.Series | None:
@@ -405,57 +405,91 @@ def _consensus(symbol: str) -> Dict:
     return data
 
 
-def _load_theme_map() -> Dict[str, Dict]:
-    if _THEME_CACHE.get("loaded"):
-        return _THEME_CACHE.get("map", {})
+def _get_symbol_theme_meta(symbol: str) -> Dict:
+    sym = (symbol or "").upper()
+    if sym in _THEME_META_CACHE:
+        return _THEME_META_CACHE[sym]
 
-    out: Dict[str, Dict] = {}
-    base = Path(__file__).resolve().parent / "public"
-    for fn in ["theme-now-kr.json", "theme-now.json"]:
-        p = base / fn
-        if not p.exists():
-            continue
-        try:
-            j = json.loads(p.read_text(encoding="utf-8"))
-            for th in j.get("themes", []) or []:
-                tname = th.get("theme")
-                tscore = float(th.get("themeScore", 50.0) or 50.0)
-                for ld in th.get("leaders", []) or []:
-                    sym = str(ld.get("symbol", "")).strip().upper()
-                    if not sym:
-                        continue
-                    cur = out.get(sym)
-                    cand = {"theme": tname, "themeScore": tscore, "leaderScore": float(ld.get("score", 50.0) or 50.0)}
-                    if cur is None or cand["themeScore"] > cur.get("themeScore", 0):
-                        out[sym] = cand
-        except Exception:
-            continue
+    out = {"theme": "UNKNOWN", "sector": None, "industry": None}
+    try:
+        info = yf.Ticker(sym).info or {}
+        sector = (info.get("sector") or "").strip()
+        industry = (info.get("industry") or "").strip()
 
-    _THEME_CACHE["loaded"] = True
-    _THEME_CACHE["map"] = out
+        if sector and industry:
+            theme = f"{sector} > {industry}"
+        elif sector:
+            theme = sector
+        elif industry:
+            theme = industry
+        else:
+            theme = "UNKNOWN"
+
+        out = {"theme": theme, "sector": sector or None, "industry": industry or None}
+    except Exception:
+        pass
+
+    _THEME_META_CACHE[sym] = out
     return out
 
 
-def _theme_signal(symbol: str) -> Dict:
-    m = _load_theme_map()
-    rec = m.get((symbol or "").upper())
-    if not rec:
-        return {"theme": None, "themeScore": 50.0, "leaderScore": None, "score": 50.0, "matched": False}
+def _apply_runtime_theme_scores(rows: List[Dict]) -> List[Dict]:
+    """각 종목 분석 후 종목별 theme를 추정하고 테마점수를 계산해 종목점수에 반영한다."""
+    if not rows:
+        return rows
 
-    # themeScore 중심 + leaderScore 보조
-    ts = float(rec.get("themeScore", 50.0) or 50.0)
-    ls = rec.get("leaderScore")
-    if isinstance(ls, (int, float)):
-        score = 0.7 * ts + 0.3 * float(ls)
-    else:
-        score = ts
-    return {
-        "theme": rec.get("theme"),
-        "themeScore": round(ts, 2),
-        "leaderScore": None if ls is None else round(float(ls), 2),
-        "score": round(float(np.clip(score, 0, 100)), 2),
-        "matched": True,
-    }
+    # 1) 각 종목 theme 메타 부착
+    for r in rows:
+        meta = _get_symbol_theme_meta(r.get("symbol"))
+        r.setdefault("components", {})["theme"] = {
+            "theme": meta.get("theme"),
+            "sector": meta.get("sector"),
+            "industry": meta.get("industry"),
+            "themeScore": 50.0,
+            "leaderScore": None,
+            "score": 50.0,
+            "matched": False,
+            "source": "runtime-grouping",
+        }
+
+    # 2) theme별 그룹 스코어 계산
+    groups: Dict[str, List[Dict]] = {}
+    for r in rows:
+        t = r.get("components", {}).get("theme", {}).get("theme") or "UNKNOWN"
+        groups.setdefault(t, []).append(r)
+
+    theme_scores: Dict[str, float] = {}
+    for t, arr in groups.items():
+        base_avg = float(np.mean([float(x.get("scoreBase", x.get("score", 50.0))) for x in arr]))
+        tech_avg = float(np.mean([float((x.get("components", {}).get("technical", {}) or {}).get("score", 50.0)) for x in arr]))
+        news_avg = float(np.mean([float((x.get("components", {}).get("crowd", {}) or {}).get("score", 50.0)) for x in arr]))
+        breadth = np.clip((len(arr) / 10.0) * 100, 0, 100)
+        theme_score = float(np.clip(0.5 * base_avg + 0.2 * tech_avg + 0.2 * news_avg + 0.1 * breadth, 0, 100))
+        theme_scores[t] = theme_score
+
+    # 3) 종목별 리더점수(해당 테마 내 상대강도) + 최종 점수 재보정
+    for t, arr in groups.items():
+        arr_sorted = sorted(arr, key=lambda x: float(x.get("scoreBase", x.get("score", 50.0))), reverse=True)
+        n = len(arr_sorted)
+        for i, r in enumerate(arr_sorted):
+            leader = 100.0 if n <= 1 else float(np.clip(100 - (i / (n - 1)) * 35, 65, 100))
+            th = r.get("components", {}).get("theme", {})
+            th.update({
+                "themeScore": round(theme_scores[t], 2),
+                "leaderScore": round(leader, 2),
+                "score": round(float(np.clip(0.7 * theme_scores[t] + 0.3 * leader, 0, 100)), 2),
+                "matched": t != "UNKNOWN",
+            })
+            r["components"]["theme"] = th
+
+            # 테마점수를 종합점수에 반영 (요청: 테마 우선)
+            base = float(r.get("scoreBase", r.get("score", 50.0)))
+            conf = float(r.get("confidence", 50.0))
+            final_score = 0.75 * base + 0.25 * th["score"]
+            final_score = 0.9 * final_score + 0.1 * conf
+            r["score"] = round(float(np.clip(final_score, 0, 100)), 2)
+
+    return rows
 
 
 def _news(symbol: str, name: str, limit: int = 8) -> Dict:
@@ -632,25 +666,21 @@ def evaluate_asset(asset: Asset) -> Dict | None:
     liquidity = _liquidity_score(asset.symbol)
     risk = _risk_score(s)
     technical = _technical_score(s, target_price=report_consensus.get("targetMeanPrice"))
-    theme = _theme_signal(asset.symbol)
 
-    # 사용자 요청 반영: 테마 > 리서치 > 뉴스 > 기술적분석
+    # 1차 기본점수(테마 제외): R/C/T
     base_score = (
-        0.40 * theme["score"] +
-        0.30 * report_consensus["score"] +
-        0.20 * crowd["score"] +
-        0.10 * technical["score"]
+        0.60 * report_consensus["score"] +
+        0.25 * crowd["score"] +
+        0.15 * technical["score"]
     )
 
-    # 전체 신뢰도(데이터 품질)도 동일 우선순위 반영
+    # 데이터 품질 기반 신뢰도
     r_conf = float(report_consensus.get("confidence", 50.0) or 0.0)
     c_conf = float(np.clip(((crowd.get("headlineCount", 0) or 0) / 8.0) * 100, 0, 100))
     t_conf = 85.0 if technical.get("setup") in {"pullback-in-uptrend", "healthy-trend"} else 70.0
-    th_conf = 90.0 if theme.get("matched") else 50.0
-    confidence = 0.40 * th_conf + 0.30 * r_conf + 0.20 * c_conf + 0.10 * t_conf
+    confidence = 0.60 * r_conf + 0.25 * c_conf + 0.15 * t_conf
 
-    # 최종점수 = 기본점수 + 신뢰도 보정
-    score = 0.85 * base_score + 0.15 * confidence
+    score = 0.9 * base_score + 0.1 * confidence
 
     cur = float(s.iloc[-1])
     atrp = float(s.pct_change().abs().tail(14).mean()) if len(s) > 20 else 0.03
@@ -682,7 +712,6 @@ def evaluate_asset(asset: Asset) -> Dict | None:
             "momentum": momentum,
             "technical": technical,
             "crowd": crowd,
-            "theme": theme,
             "liquidityScore": liquidity,
             "risk": risk,
         },
@@ -742,6 +771,9 @@ def build_report(market: str = "all", progress_cb=None) -> Dict:
     # 사용자 요청: ETF 제외 (단일 주식만 허용)
     rows = [r for r in rows if not _is_etf_like(r)]
 
+    # 종목분석 완료 후, 런타임 테마 추정/테마점수 산출/최종점수 반영
+    rows = _apply_runtime_theme_scores(rows)
+
     rows.sort(key=lambda x: x["score"], reverse=True)
 
     # 보조 랭킹(참고용)
@@ -784,7 +816,7 @@ def build_report(market: str = "all", progress_cb=None) -> Dict:
         "generatedAt": datetime.now(UTC).isoformat().replace("+00:00", "Z"),
         "model": f"{market_label} Single-Stock Dual Ranking v5 (No Momentum + Technical)",
         "market": mk,
-        "methodology": "S=0.85*(0.40TH+0.30R+0.20C+0.10T)+0.15*Confidence (TH>R>C>T)",
+        "methodology": "S=RuntimeThemeAdjusted: base(R/C/T)+runtime-theme scoring after full analysis (TH>R>C>T)",
         "topPick": top,
         "rankings": rows,
         "riskAdjustedRankings": risk_adjusted,
