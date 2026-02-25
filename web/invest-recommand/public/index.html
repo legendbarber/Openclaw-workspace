@@ -49,8 +49,7 @@
     <div class="card">📁 과거 추천 기록 조회는 <a href="/invest-recommend/calendar">/invest-recommend/calendar</a> 에서 확인</div>
     <div id="notrade" class="card" style="display:none"></div>
     <div id="top" class="card"></div>
-    <div id="riskAdjustedTop5" class="row"></div>
-    <div id="highReturnTop5" class="row"></div>
+    <div id="scoreTop5" class="row"></div>
     <div id="breakdown" class="row"></div>
   </div>
 
@@ -293,8 +292,7 @@ async function loadData(){
     document.getElementById('kpiRet').textContent='-';
     document.getElementById('kpiRR').textContent='-';
     document.getElementById('top').innerHTML = '추천 후보 없음';
-    document.getElementById('riskAdjustedTop5').innerHTML = '';
-    document.getElementById('highReturnTop5').innerHTML = '';
+    document.getElementById('scoreTop5').innerHTML = '';
     document.getElementById('breakdown').innerHTML = '';
     return;
   }
@@ -334,12 +332,11 @@ async function loadData(){
     </div>
   `;
 
-  const riskAdjustedTop5 = (d.riskAdjustedRankings || d.rankings || []).slice(0,5);
-  const highReturnTop5 = (d.highReturnRankings || d.rankings || []).slice(0,5);
+  const scoreTop5 = (d.rankings || []).slice(0,5);
 
-  document.getElementById('riskAdjustedTop5').innerHTML = `
-    <div class='card' style='grid-column:1/-1'><b>📌 위험대비 기대수익 상위 5</b></div>
-  ` + riskAdjustedTop5.map((r, idx) => {
+  document.getElementById('scoreTop5').innerHTML = `
+    <div class='card' style='grid-column:1/-1'><b>📌 종합점수 상위 5 (점수순)</b></div>
+  ` + scoreTop5.map((r, idx) => {
     const lossPct = pctFrom(r.currentPrice, r.plan.stopLoss);
     const profitPct = pctFrom(r.currentPrice, r.plan.takeProfit1);
     return `
@@ -353,38 +350,14 @@ async function loadData(){
       <b>예상 손실률:</b> ${fmtPct(lossPct)} / <b>예상 수익률:</b> ${fmtPct(profitPct)}<br>
       <b>RR(기대수익/위험):</b> ${fmt(r.riskReward || (profitPct && lossPct ? (profitPct/Math.abs(lossPct)) : null))}<br>
       <b>수익률 평가 시점:</b> ${expectedHorizon(r.plan.ttlTradingDays)}<br>
-      <b>미니 차트 (3개월):</b><br><div id='risk-mini-${idx}' style='height:190px;min-height:190px;margin-top:6px;background:#0f172a;border:1px solid #24304f;border-radius:8px;padding:4px;box-sizing:border-box;overflow:hidden;'></div><br>
-      <b>추천 근거:</b> 요약만 표시 · ${detailLink(r.symbol)}
-    </div>
-  `}).join('');
-
-  document.getElementById('highReturnTop5').innerHTML = `
-    <div class='card' style='grid-column:1/-1'><b>🚀 절대 기대수익 상위 5</b></div>
-  ` + highReturnTop5.map((r, idx) => {
-    const lossPct = pctFrom(r.currentPrice, r.plan.stopLoss);
-    const profitPct = pctFrom(r.currentPrice, r.plan.takeProfit1);
-    return `
-    <div class='card'>
-      <b>#${idx+1} ${r.symbol} (${r.name})</b> · ${detailLink(r.symbol)}<br>
-      점수: ${fmt(r.score)} / 현재가: ${fmt(r.currentPrice)}<br>
-      목표주가 컨센서스: ${fmt(r.components?.reportConsensus?.targetMeanPrice)} (${fmtPct(r.components?.reportConsensus?.upsidePct)})<br>
-      <b>설명:</b> ${productDesc(r.symbol, r.name, r.category)}<br>
-      진입: ${fmt(r.plan.entryZone[0])}~${fmt(r.plan.entryZone[1])}<br>
-      손절: ${fmt(r.plan.stopLoss)} / 익절1: ${fmt(r.plan.takeProfit1)}<br>
-      <b>예상 손실률:</b> ${fmtPct(lossPct)} / <b>예상 수익률:</b> ${fmtPct(profitPct)}<br>
-      <b>RR(기대수익/위험):</b> ${fmt(r.riskReward || (profitPct && lossPct ? (profitPct/Math.abs(lossPct)) : null))}<br>
-      <b>수익률 평가 시점:</b> ${expectedHorizon(r.plan.ttlTradingDays)}<br>
-      <b>미니 차트 (3개월):</b><br><div id='ret-mini-${idx}' style='height:190px;min-height:190px;margin-top:6px;background:#0f172a;border:1px solid #24304f;border-radius:8px;padding:4px;box-sizing:border-box;overflow:hidden;'></div><br>
+      <b>미니 차트 (3개월):</b><br><div id='score-mini-${idx}' style='height:190px;min-height:190px;margin-top:6px;background:#0f172a;border:1px solid #24304f;border-radius:8px;padding:4px;box-sizing:border-box;overflow:hidden;'></div><br>
       <b>추천 근거:</b> 요약만 표시 · ${detailLink(r.symbol)}
     </div>
   `}).join('');
 
   await renderMiniChart(x.symbol, 'mini-top');
-  for(let i=0;i<riskAdjustedTop5.length;i++){
-    await renderMiniChart(riskAdjustedTop5[i].symbol, `risk-mini-${i}`);
-  }
-  for(let i=0;i<highReturnTop5.length;i++){
-    await renderMiniChart(highReturnTop5[i].symbol, `ret-mini-${i}`);
+  for(let i=0;i<scoreTop5.length;i++){
+    await renderMiniChart(scoreTop5[i].symbol, `score-mini-${i}`);
   }
 
   const c = x.components;
@@ -397,9 +370,9 @@ async function loadData(){
       추천지수: ${fmt(c.reportConsensus.recommendationMean)} / 의견수: ${fmt(c.reportConsensus.analystOpinions,0)} / 소스: ${c.reportConsensus.source || '-'}
     </div>
     <div class='card'>
-      <b>T) 기술적 분석(차트/가격)</b><br>
+      <b>T) 기술적 분석(차트/가격+남은자리)</b><br>
       점수: ${fmt(c.technical?.score)} / 셋업: ${c.technical?.setup||'-'}<br>
-      RSI(14): ${fmt(c.technical?.rsi14)} / MA20 이격: ${fmt(c.technical?.distMa20Pct)}% / 20일 고점대비: ${fmt(c.technical?.from20dHighPct)}%
+      RSI(14): ${fmt(c.technical?.rsi14)} / MA20 이격: ${fmt(c.technical?.distMa20Pct)}% / 20일 고점대비: ${fmt(c.technical?.from20dHighPct)}% / 목표가 기준 남은자리: ${fmtPct(c.technical?.headroomPct)}
     </div>
     <div class='card'>
       <b>C) 군중/뉴스 시그널</b><br>

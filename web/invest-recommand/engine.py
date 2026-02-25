@@ -353,8 +353,10 @@ def _risk_score(s: pd.Series) -> Dict:
     return {"volPct": round(v, 2), "maxDrawdownPct": round(dd, 2), "score": round(score, 2)}
 
 
-def _technical_score(s: pd.Series) -> Dict:
-    """가격/차트 기반 기술적 진입 타이밍 점수 (모멘텀과 분리)."""
+def _technical_score(s: pd.Series, target_price: float | None = None) -> Dict:
+    """가격/차트 기반 기술적 진입 타이밍 점수 (모멘텀과 분리).
+    target_price가 있으면 '추가 상승 여력(headroom)'도 반영한다.
+    """
     close = s.astype(float)
     cur = float(close.iloc[-1])
 
@@ -418,6 +420,22 @@ def _technical_score(s: pd.Series) -> Dict:
     elif from_high20 < -18:
         score -= 10
 
+    # 5) 목표주가 기준 남은 자리(headroom) 반영
+    #    너무 여력이 작으면(이미 많이 오른 구간) 감점, 적정 여력은 가점
+    headroom_pct = None
+    if isinstance(target_price, (int, float)) and target_price > 0:
+        headroom_pct = (target_price / cur - 1) * 100
+        if headroom_pct < 4:
+            score -= 14
+        elif headroom_pct < 8:
+            score -= 6
+        elif headroom_pct <= 20:
+            score += 8
+        elif headroom_pct <= 35:
+            score += 12
+        else:
+            score += 6
+
     score = float(np.clip(score, 0, 100))
 
     return {
@@ -429,6 +447,7 @@ def _technical_score(s: pd.Series) -> Dict:
         "ma60": round(ma60, 2),
         "ma120": round(ma120, 2),
         "setup": setup,
+        "headroomPct": None if headroom_pct is None else round(float(headroom_pct), 2),
     }
 
 
@@ -442,7 +461,7 @@ def evaluate_asset(asset: Asset) -> Dict | None:
     crowd = _news(asset.symbol, asset.name)
     liquidity = _liquidity_score(asset.symbol)
     risk = _risk_score(s)
-    technical = _technical_score(s)
+    technical = _technical_score(s, target_price=report_consensus.get("targetMeanPrice"))
 
     # 사용자 요청 반영: reportConsensus + technical만 사용 (7:3)
     score = (
@@ -532,7 +551,7 @@ def build_report(market: str = "all") -> Dict:
 
     rows.sort(key=lambda x: x["score"], reverse=True)
 
-    # 위험대비 기대수익(리스크/리워드) 우선 랭킹
+    # 보조 랭킹(참고용)
     risk_adjusted = sorted(
         rows,
         key=lambda x: (
@@ -543,7 +562,6 @@ def build_report(market: str = "all") -> Dict:
         reverse=True,
     )
 
-    # 절대 기대수익(1차 익절 기준) 우선 랭킹
     high_return = sorted(
         rows,
         key=lambda x: (
@@ -554,7 +572,8 @@ def build_report(market: str = "all") -> Dict:
         reverse=True,
     )
 
-    top = risk_adjusted[0] if risk_adjusted else None
+    # 메인 추천/순위는 종합점수(score) 기준
+    top = rows[0] if rows else None
 
     no_trade = False
     no_trade_reason = None
@@ -572,7 +591,7 @@ def build_report(market: str = "all") -> Dict:
         "generatedAt": datetime.now(UTC).isoformat().replace("+00:00", "Z"),
         "model": f"{market_label} Single-Stock Dual Ranking v5 (No Momentum + Technical)",
         "market": mk,
-        "methodology": "S=0.70R+0.30T (R: ReportConsensus from Naver Research / T: Technical) + Dual Rank(RR/Return)",
+        "methodology": "S=0.70R+0.30T (R: ReportConsensus / T: Technical+Headroom)",
         "topPick": top,
         "rankings": rows,
         "riskAdjustedRankings": risk_adjusted,
