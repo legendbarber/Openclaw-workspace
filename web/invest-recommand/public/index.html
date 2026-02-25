@@ -319,7 +319,6 @@ async function loadData(){
     <div><b>예상 손실률:</b> ${fmtPct(topLossPct)} / <b>예상 수익률:</b> 1차 ${fmtPct(topProfit1Pct)} · 2차 ${fmtPct(topProfit2Pct)}</div>
     <div><b>수익률 평가 시점:</b> 목표가 도달 시점 기준 (${expectedHorizon(x.plan.ttlTradingDays)})</div>
     <div>유효기간: ${x.plan.ttlTradingDays}거래일</div>
-    <div style='margin-top:8px'><b>추천 근거 요약:</b> 기술/리포트/리스크/뉴스 점수 조합 기반 · ${detailLink(x.symbol)}</div>
     <div style='margin-top:10px;margin-bottom:10px'>
       <b>미니 차트 (3개월)</b><br>
       <div id='mini-top' style='height:190px;min-height:190px;margin-top:6px;background:#0f172a;border:1px solid #24304f;border-radius:8px;padding:4px;box-sizing:border-box;overflow:hidden;'></div>
@@ -351,7 +350,6 @@ async function loadData(){
       <b>RR(기대수익/위험):</b> ${fmt(r.riskReward || (profitPct && lossPct ? (profitPct/Math.abs(lossPct)) : null))}<br>
       <b>수익률 평가 시점:</b> ${expectedHorizon(r.plan.ttlTradingDays)}<br>
       <b>미니 차트 (3개월):</b><br><div id='score-mini-${idx}' style='height:190px;min-height:190px;margin-top:6px;background:#0f172a;border:1px solid #24304f;border-radius:8px;padding:4px;box-sizing:border-box;overflow:hidden;'></div><br>
-      <b>추천 근거:</b> 요약만 표시 · ${detailLink(r.symbol)}
     </div>
   `}).join('');
 
@@ -373,21 +371,6 @@ async function loadData(){
       <b>T) 기술적 분석(차트/가격+남은자리)</b><br>
       점수: ${fmt(c.technical?.score)} / 셋업: ${c.technical?.setup||'-'}<br>
       RSI(14): ${fmt(c.technical?.rsi14)} / MA20 이격: ${fmt(c.technical?.distMa20Pct)}% / 20일 고점대비: ${fmt(c.technical?.from20dHighPct)}% / 목표가 기준 남은자리: ${fmtPct(c.technical?.headroomPct)}
-    </div>
-    <div class='card'>
-      <b>C) 군중/뉴스 시그널</b><br>
-      점수: ${fmt(c.crowd.score)} / 톤: ${fmt(c.crowd.tone,0)} / 헤드라인: ${fmt(c.crowd.headlineCount,0)}개
-      <ul>${(c.crowd.headlines||[]).map(h=>`<li>${h}</li>`).join('')}</ul>
-    </div>
-    <div class='card'>
-      <b>L+V) 유동성/리스크</b><br>
-      유동성 점수: ${fmt(c.liquidityScore)}<br>
-      리스크 점수: ${fmt(c.risk.score)} / 변동성: ${fmt(c.risk.volPct)}% / 최대낙폭: ${fmt(c.risk.maxDrawdownPct)}%
-    </div>
-    <div class='card'>
-      <b>(참고) M) 가격 모멘텀</b><br>
-      점수: ${fmt(c.momentum.score)}<br>
-      1M: ${fmt(c.momentum.m1Pct)}% / 3M: ${fmt(c.momentum.m3Pct)}% / 6M: ${fmt(c.momentum.m6Pct)}%
     </div>
   `;
 }
