@@ -272,9 +272,11 @@ def _recommendation_bucket(rec: str | None) -> str | None:
     return None
 
 
-def _consensus_from_naver_or_hk(symbol: str) -> Dict:
-    """KR 종목은 네이버 증권 리서치 보고서에서 최근 목표주가 평균을 계산한다.
-    (요청사항: yfinance 컨센서스 미사용)
+def _consensus_from_naver_or_hk(symbol: str, name: str | None = None) -> Dict:
+    """KR 종목은 한경 컨센서스 리포트 목록을 우선 사용해 컨센서스 점수를 계산한다.
+    - 최근 1개월 기업 리포트만 사용
+    - 동일 증권사 중복 제거
+    - 목표가(텍스트 추출 가능 시) + 투자의견 분포 + 표본수 + 최신도 반영
     """
     code_match = re.match(r"^(\d{6})\.(KS|KQ)$", symbol or "")
     if not code_match:
@@ -285,68 +287,117 @@ def _consensus_from_naver_or_hk(symbol: str) -> Dict:
             "recommendationKey": None,
             "analystOpinions": 0,
             "opinionDistribution": {"buy": 0, "hold": 0, "sell": 0},
-            "source": "naver_research",
+            "source": "hankyung_consensus",
             "confidence": 0.0,
             "score": 50.0,
         }
 
-    code = code_match.group(1)
-    list_url = f"https://finance.naver.com/research/company_list.naver?searchType=itemCode&itemCode={code}&page=1"
+    stock_name = (name or "").strip()
+    if not stock_name:
+        try:
+            info = yf.Ticker(symbol).info or {}
+            stock_name = str(info.get("shortName") or info.get("longName") or "").strip()
+        except Exception:
+            stock_name = ""
+    stock_name = re.sub(r"\(.*?\)", "", stock_name).strip()
+
+    if not stock_name:
+        return {
+            "targetMeanPrice": None,
+            "upsidePct": None,
+            "recommendationMean": None,
+            "recommendationKey": None,
+            "analystOpinions": 0,
+            "opinionDistribution": {"buy": 0, "hold": 0, "sell": 0},
+            "source": "hankyung_consensus",
+            "confidence": 0.0,
+            "score": 50.0,
+        }
 
     try:
-        html = _safe_fetch_text(list_url, encoding="euc-kr")
-        nids = re.findall(r"company_read\.naver\?nid=(\d+)&page=1&searchType=itemCode&itemCode=" + re.escape(code), html)
-        nids = list(dict.fromkeys(nids))[:12]
+        today = datetime.now(KST).date()
+        sdate = (today - timedelta(days=31)).strftime("%Y-%m-%d")
+        edate = today.strftime("%Y-%m-%d")
+        url = (
+            "https://consensus.hankyung.com/analysis/list?"
+            + urllib.parse.urlencode({
+                "sdate": sdate,
+                "edate": edate,
+                "search_value": "REPORT_TITLE",
+                "search_text": stock_name,
+                "report_type": "CO",
+                "pagenum": "80",
+                "now_page": "1",
+            })
+        )
+        html = _safe_fetch_text(url, encoding="utf-8")
 
-        targets = []
-        target_ages = []
-        recs = []
-        rec_ages = []
+        def _txt(x: str) -> str:
+            x = re.sub(r"<[^>]+>", " ", x)
+            return re.sub(r"\s+", " ", x).strip()
+
+        targets: List[float] = []
+        target_ages: List[int] = []
+        recs: List[str] = []
+        rec_ages: List[int] = []
         used_brokers = set()
-        cutoff = datetime.now(KST).date() - timedelta(days=31)
 
-        for nid in nids:
+        rows = re.findall(r"<tr[^>]*>(.*?)</tr>", html, re.S)
+        for tr in rows:
+            if "class=\"text_l\"" not in tr or "/analysis/downpdf?report_idx=" not in tr:
+                continue
+
+            m_date = re.search(r'class="first txt_number">\s*(\d{4}-\d{2}-\d{2})\s*</td>', tr)
+            if not m_date:
+                continue
             try:
-                read_url = f"https://finance.naver.com/research/company_read.naver?nid={nid}&page=1&searchType=itemCode&itemCode={code}"
-                body = _safe_fetch_text(read_url, encoding="euc-kr")
-
-                # 리포트 날짜 필터: 최근 1개월 이내만 반영
-                m_date = re.search(r'<p class="source">[\s\S]*?<b class="bar">\|</b>\s*(\d{4}\.\d{2}\.\d{2})\s*<b class="bar">\|</b>', body)
-                if not m_date:
-                    continue
-                try:
-                    d = datetime.strptime(m_date.group(1), "%Y.%m.%d").date()
-                    if d < cutoff:
-                        continue
-                    age_days = max(0, (datetime.now(KST).date() - d).days)
-                except Exception:
-                    continue
-
-                # 동일 증권사 중복 방지 (가장 최신 리포트 1개만 사용)
-                m_broker = re.search(r'<p class="source">\s*([^<|]+?)\s*<b class="bar">\|</b>', body)
-                broker = m_broker.group(1).strip() if m_broker else None
-                if broker and broker in used_brokers:
-                    continue
-
-                m_price = re.search(r'class="money"><strong>([\d,]+)</strong>', body)
-                if not m_price:
-                    continue
-                price_val = float(m_price.group(1).replace(",", ""))
-                targets.append(price_val)
-                target_ages.append(age_days)
-
-                if broker:
-                    used_brokers.add(broker)
-
-                m_rec = re.search(r'class="coment">([^<]+)</em>', body)
-                if m_rec:
-                    recs.append(m_rec.group(1).strip())
-                    rec_ages.append(age_days)
-
-                if len(targets) >= 6:
-                    break
+                d = datetime.strptime(m_date.group(1), "%Y-%m-%d").date()
             except Exception:
                 continue
+            if d < (today - timedelta(days=31)):
+                continue
+            age_days = max(0, (today - d).days)
+
+            m_title = re.search(r'class="text_l">[\s\S]*?<a [^>]*>(.*?)</a>', tr)
+            title = _txt(m_title.group(1)) if m_title else ""
+            if stock_name not in title and code_match.group(1) not in title:
+                continue
+
+            tds = re.findall(r"<td[^>]*>(.*?)</td>", tr, re.S)
+            cols = [_txt(td) for td in tds]
+            broker = cols[4] if len(cols) >= 5 else None
+            if broker and broker in used_brokers:
+                continue
+
+            detail_text = _txt(tr)
+
+            # 목표가 텍스트 추출 (가능한 경우만)
+            m_tp = (
+                re.search(r"목표\s*주가\s*[:：]?\s*([0-9][0-9,]{3,})\s*원", detail_text, re.I)
+                or re.search(r"적정\s*주가\s*[:：]?\s*([0-9][0-9,]{3,})\s*원", detail_text, re.I)
+                or re.search(r"\bTP\s*[:=]?\s*([0-9][0-9,]{3,})\b", detail_text, re.I)
+            )
+            if m_tp:
+                try:
+                    targets.append(float(m_tp.group(1).replace(",", "")))
+                    target_ages.append(age_days)
+                except Exception:
+                    pass
+
+            rec_text = ""
+            for kw in ["매수", "중립", "보유", "매도", "BUY", "HOLD", "SELL", "Outperform", "Underperform", "Neutral"]:
+                if re.search(re.escape(kw), detail_text, re.I):
+                    rec_text = kw
+                    break
+            if rec_text:
+                recs.append(rec_text)
+                rec_ages.append(age_days)
+
+            if broker:
+                used_brokers.add(broker)
+
+            if len(used_brokers) >= 6:
+                break
 
         cur = None
         try:
@@ -358,30 +409,16 @@ def _consensus_from_naver_or_hk(symbol: str) -> Dict:
             cur = None
 
         target = None
-        target_trend_pct = 0.0
         recency_bonus = 0.0
         if targets:
-            # 최근성 가중(최신 리포트일수록 가중치↑)
             w = np.array([np.exp(-float(a) / 21.0) for a in target_ages], dtype=float)
             t = np.array(targets, dtype=float)
             if len(t) >= 5:
-                # 이상치 완화: 상하위 1개 제거 후 가중평균
                 idx = np.argsort(t)
                 keep = idx[1:-1]
                 t = t[keep]
                 w = w[keep]
             target = float(np.average(t, weights=w)) if w.sum() > 0 else float(np.mean(t))
-
-            # 목표가 추세(최근 대비 과거)
-            if len(t) >= 2:
-                latest_i = int(np.argmin(np.array(target_ages)[:len(targets)]))
-                oldest_i = int(np.argmax(np.array(target_ages)[:len(targets)]))
-                latest_t = float(targets[latest_i])
-                oldest_t = float(targets[oldest_i])
-                if oldest_t > 0:
-                    target_trend_pct = (latest_t / oldest_t - 1) * 100
-
-            # 리포트 최신도 보너스
             avg_age = float(np.average(np.array(target_ages, dtype=float), weights=w)) if w.sum() > 0 else float(np.mean(target_ages))
             recency_bonus = float(np.clip((31 - avg_age) / 31 * 8, 0, 8))
 
@@ -390,7 +427,6 @@ def _consensus_from_naver_or_hk(symbol: str) -> Dict:
         rec_scores = [x for x in (_recommendation_to_score(r) for r in recs) if isinstance(x, (int, float))]
         mean = float(np.mean(rec_scores)) if rec_scores else None
 
-        # 최근성 가중 투자의견 평균
         w_rec = np.array([np.exp(-float(a) / 21.0) for a in rec_ages], dtype=float) if rec_ages else np.array([], dtype=float)
         if len(rec_scores) == len(rec_ages) and len(rec_scores) > 0 and w_rec.sum() > 0:
             mean_w = float(np.average(np.array(rec_scores, dtype=float), weights=w_rec))
@@ -412,18 +448,13 @@ def _consensus_from_naver_or_hk(symbol: str) -> Dict:
         buy_ratio_w = b_w["buy"] / total_w
         sell_ratio_w = b_w["sell"] / total_w
 
+        sample_n = max(len(used_brokers), len(targets), len(recs))
         score = 50.0
-        # 업사이드는 점수에서 제외: 방향/분포/표본/추세/최신도 반영
         if isinstance(mean_w, (int, float)):
             score += float(np.clip((3.2 - mean_w) * 10, -15, 20))
-        # 분포(가중 + 비가중 평균 혼합)
         dist_raw = 0.7 * (buy_ratio_w - sell_ratio_w) + 0.3 * (buy_ratio - sell_ratio)
         score += float(np.clip(dist_raw * 25, -15, 25))
-        # 표본 수
-        score += float(np.clip(len(targets) * 3.0, 0, 20))
-        # 목표가 추세(상향 조정 가점)
-        score += float(np.clip(target_trend_pct / 2.0, -8, 8))
-        # 최신도 보너스
+        score += float(np.clip(sample_n * 3.0, 0, 20))
         score += recency_bonus
 
         return {
@@ -431,12 +462,11 @@ def _consensus_from_naver_or_hk(symbol: str) -> Dict:
             "upsidePct": None if up is None else round(float(up), 2),
             "recommendationMean": None if mean_w is None else round(float(mean_w), 2),
             "recommendationKey": None,
-            "analystOpinions": len(targets),
+            "analystOpinions": sample_n,
             "opinionDistribution": b,
-            "targetTrendPct": round(float(target_trend_pct), 2),
             "freshnessBonus": round(float(recency_bonus), 2),
-            "source": "naver_research",
-            "confidence": round(float(np.clip((len(targets) / 6) * 100, 0, 100)), 2),
+            "source": "hankyung_consensus",
+            "confidence": round(float(np.clip((sample_n / 6) * 100, 0, 100)), 2),
             "score": round(float(np.clip(score, 0, 100)), 2),
         }
     except Exception:
@@ -447,7 +477,7 @@ def _consensus_from_naver_or_hk(symbol: str) -> Dict:
             "recommendationKey": None,
             "analystOpinions": 0,
             "opinionDistribution": {"buy": 0, "hold": 0, "sell": 0},
-            "source": "naver_research",
+            "source": "hankyung_consensus",
             "confidence": 0.0,
             "score": 50.0,
         }
@@ -509,14 +539,14 @@ def _consensus_from_yfinance(symbol: str) -> Dict:
         }
 
 
-def _consensus(symbol: str) -> Dict:
+def _consensus(symbol: str, name: str | None = None) -> Dict:
     now = time.time()
     cached = _CONS_CACHE.get(symbol)
     if cached and (now - cached.get("ts", 0) < _CONS_TTL_SEC):
         return cached["data"]
 
     is_kr = bool(re.match(r"^(\d{6})\.(KS|KQ)$", symbol or ""))
-    data = _consensus_from_naver_or_hk(symbol) if is_kr else _consensus_from_yfinance(symbol)
+    data = _consensus_from_naver_or_hk(symbol, name=name) if is_kr else _consensus_from_yfinance(symbol)
     _CONS_CACHE[symbol] = {"ts": now, "data": data}
     return data
 
@@ -838,7 +868,7 @@ def evaluate_asset(asset: Asset) -> Dict | None:
     if s is None:
         return None
 
-    report_consensus = _consensus(asset.symbol)
+    report_consensus = _consensus(asset.symbol, asset.name)
     momentum = _momentum_score(s)
     crowd = _news(asset.symbol, asset.name)
     liquidity = _liquidity_score(asset.symbol)
