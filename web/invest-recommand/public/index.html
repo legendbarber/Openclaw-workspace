@@ -440,6 +440,11 @@ async function loadData(){
       점수: ${fmt(c.technical?.score)} / 셋업: ${c.technical?.setup||'-'}<br>
       RSI(14): ${fmt(c.technical?.rsi14)} / MA20 이격: ${fmt(c.technical?.distMa20Pct)}% / 20일 고점대비: ${fmt(c.technical?.from20dHighPct)}%
     </div>
+    <div class='card'>
+      <b>TH) 테마 강도</b><br>
+      테마: ${c.theme?.theme || '-'}<br>
+      테마점수: ${fmt(c.theme?.themeScore)} / 리더점수: ${fmt(c.theme?.leaderScore)} / 반영점수: ${fmt(c.theme?.score)}
+    </div>
   `;
 }
 

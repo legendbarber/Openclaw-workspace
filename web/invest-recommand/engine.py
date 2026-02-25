@@ -84,6 +84,7 @@ SNAPSHOT_DIR = Path(__file__).resolve().parent / "snapshots"
 KST = ZoneInfo("Asia/Seoul")
 POSITIVE = ["beat", "strong", "upgrade", "rally", "surge", "record", "gain"]
 NEGATIVE = ["miss", "downgrade", "drop", "fall", "weak", "risk", "lawsuit"]
+_THEME_CACHE = {"loaded": False, "map": {}}
 
 
 def _download_close(symbol: str, period: str = "1y") -> pd.Series | None:
@@ -404,6 +405,59 @@ def _consensus(symbol: str) -> Dict:
     return data
 
 
+def _load_theme_map() -> Dict[str, Dict]:
+    if _THEME_CACHE.get("loaded"):
+        return _THEME_CACHE.get("map", {})
+
+    out: Dict[str, Dict] = {}
+    base = Path(__file__).resolve().parent / "public"
+    for fn in ["theme-now-kr.json", "theme-now.json"]:
+        p = base / fn
+        if not p.exists():
+            continue
+        try:
+            j = json.loads(p.read_text(encoding="utf-8"))
+            for th in j.get("themes", []) or []:
+                tname = th.get("theme")
+                tscore = float(th.get("themeScore", 50.0) or 50.0)
+                for ld in th.get("leaders", []) or []:
+                    sym = str(ld.get("symbol", "")).strip().upper()
+                    if not sym:
+                        continue
+                    cur = out.get(sym)
+                    cand = {"theme": tname, "themeScore": tscore, "leaderScore": float(ld.get("score", 50.0) or 50.0)}
+                    if cur is None or cand["themeScore"] > cur.get("themeScore", 0):
+                        out[sym] = cand
+        except Exception:
+            continue
+
+    _THEME_CACHE["loaded"] = True
+    _THEME_CACHE["map"] = out
+    return out
+
+
+def _theme_signal(symbol: str) -> Dict:
+    m = _load_theme_map()
+    rec = m.get((symbol or "").upper())
+    if not rec:
+        return {"theme": None, "themeScore": 50.0, "leaderScore": None, "score": 50.0, "matched": False}
+
+    # themeScore 중심 + leaderScore 보조
+    ts = float(rec.get("themeScore", 50.0) or 50.0)
+    ls = rec.get("leaderScore")
+    if isinstance(ls, (int, float)):
+        score = 0.7 * ts + 0.3 * float(ls)
+    else:
+        score = ts
+    return {
+        "theme": rec.get("theme"),
+        "themeScore": round(ts, 2),
+        "leaderScore": None if ls is None else round(float(ls), 2),
+        "score": round(float(np.clip(score, 0, 100)), 2),
+        "matched": True,
+    }
+
+
 def _news(symbol: str, name: str, limit: int = 8) -> Dict:
     try:
         q = urllib.parse.quote(f"{symbol} {name} outlook")
@@ -578,19 +632,22 @@ def evaluate_asset(asset: Asset) -> Dict | None:
     liquidity = _liquidity_score(asset.symbol)
     risk = _risk_score(s)
     technical = _technical_score(s, target_price=report_consensus.get("targetMeanPrice"))
+    theme = _theme_signal(asset.symbol)
 
-    # 사용자 요청 반영: 리서치/뉴스/기술적분석 = 6:2:2
+    # 사용자 요청 반영: 리서치/뉴스/기술적분석 + 테마
     base_score = (
-        0.60 * report_consensus["score"] +
+        0.50 * report_consensus["score"] +
         0.20 * crowd["score"] +
-        0.20 * technical["score"]
+        0.20 * technical["score"] +
+        0.10 * theme["score"]
     )
 
     # 전체 신뢰도(데이터 품질) 고도화
     r_conf = float(report_consensus.get("confidence", 50.0) or 0.0)
     c_conf = float(np.clip(((crowd.get("headlineCount", 0) or 0) / 8.0) * 100, 0, 100))
     t_conf = 85.0 if technical.get("setup") in {"pullback-in-uptrend", "healthy-trend"} else 70.0
-    confidence = 0.60 * r_conf + 0.20 * c_conf + 0.20 * t_conf
+    th_conf = 90.0 if theme.get("matched") else 50.0
+    confidence = 0.50 * r_conf + 0.20 * c_conf + 0.20 * t_conf + 0.10 * th_conf
 
     # 최종점수 = 기본점수 + 신뢰도 보정
     score = 0.85 * base_score + 0.15 * confidence
@@ -625,6 +682,7 @@ def evaluate_asset(asset: Asset) -> Dict | None:
             "momentum": momentum,
             "technical": technical,
             "crowd": crowd,
+            "theme": theme,
             "liquidityScore": liquidity,
             "risk": risk,
         },
@@ -726,7 +784,7 @@ def build_report(market: str = "all", progress_cb=None) -> Dict:
         "generatedAt": datetime.now(UTC).isoformat().replace("+00:00", "Z"),
         "model": f"{market_label} Single-Stock Dual Ranking v5 (No Momentum + Technical)",
         "market": mk,
-        "methodology": "S=0.85*(0.60R+0.20C+0.20T)+0.15*Confidence (R: Direction+Distribution+Sample+Trend+Freshness)",
+        "methodology": "S=0.85*(0.50R+0.20C+0.20T+0.10TH)+0.15*Confidence (R: Direction+Distribution+Sample+Trend+Freshness)",
         "topPick": top,
         "rankings": rows,
         "riskAdjustedRankings": risk_adjusted,
