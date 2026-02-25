@@ -234,10 +234,12 @@ def _consensus_from_naver_or_hk(symbol: str) -> Dict:
 
         score = 50.0
         if up is not None:
-            score += float(np.clip(up / 2.5, -20, 30))
+            score += float(np.clip(up / 2.5, -20, 25))
         if isinstance(mean, (int, float)):
-            score += float(np.clip((3.0 - mean) * 10, -20, 20))
-        score += float(np.clip(len(targets) / 2, 0, 10))
+            # 매수 우위(recommendationMean 낮을수록) 가중 강화
+            score += float(np.clip((3.2 - mean) * 15, -20, 30))
+        # 표본 수 가중 강화
+        score += float(np.clip(len(targets) * 3.0, 0, 20))
 
         return {
             "targetMeanPrice": None if target is None else round(target, 2),
@@ -275,11 +277,13 @@ def _consensus_from_yfinance(symbol: str) -> Dict:
 
         score = 50.0
         if up is not None:
-            score += float(np.clip(up / 2.5, -20, 30))
+            score += float(np.clip(up / 2.5, -20, 25))
         if isinstance(mean, (int, float)):
-            score += float(np.clip((3.0 - mean) * 10, -20, 20))
+            # 매수 우위(recommendationMean 낮을수록) 가중 강화
+            score += float(np.clip((3.2 - mean) * 15, -20, 30))
         if isinstance(n, (int, float)):
-            score += float(np.clip(n / 2, 0, 10))
+            # 표본 수 가중 강화
+            score += float(np.clip(n * 1.2, 0, 20))
 
         return {
             "targetMeanPrice": target,
