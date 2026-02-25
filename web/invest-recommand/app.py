@@ -101,10 +101,22 @@ def api_report():
     if market not in {'all', 'kr', 'us'}:
         market = 'all'
 
-    now = time.time()
     cached = _REPORT_CACHE.get(market)
-    if cached and (now - cached.get('ts', 0) <= _REPORT_TTL_SEC):
+    if cached and cached.get('data') is not None:
         return jsonify(cached['data'])
+
+    st = _REPORT_PROGRESS.get(market)
+    if st and st.get("status") == "running":
+        return jsonify({"status": "running", "market": market, "progress": st}), 202
+
+    return jsonify({"status": "idle", "market": market, "message": "no_cached_report"}), 404
+
+
+@app.get('/api/report/refresh')
+def api_report_refresh():
+    market = (request.args.get('market', default='all', type=str) or 'all').lower()
+    if market not in {'all', 'kr', 'us'}:
+        market = 'all'
 
     with _REPORT_LOCK:
         st = _REPORT_PROGRESS.get(market)

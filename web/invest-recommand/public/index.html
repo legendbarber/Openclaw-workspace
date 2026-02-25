@@ -34,7 +34,7 @@
       </div>
       <div style="display:flex;gap:8px;align-items:center">
         <span id="marketBadge" class="badge">LIVE SCANNER</span>
-        <button onclick="loadData()">새로 조회</button>
+        <button onclick="refreshData()">새로 조회</button>
       </div>
     </div>
 
@@ -308,12 +308,32 @@ async function renderMiniChart(symbol, elId){
   }
 }
 
+async function refreshData(){
+  const market = getMarket();
+  const r = await apiGet(`/api/report/refresh?market=${market}&t=${Date.now()}`);
+  if(r.status==='running' || r.__status===202){
+    const pr = r.progress || {};
+    showProgress(`⏳ 분석 시작... ${pr.done ?? 0}/${pr.total ?? 0} (${pr.progressPct ?? 0}%)`);
+    await waitReportReady(market);
+    await loadData();
+    return;
+  }
+  await loadData();
+}
+
 async function loadData(){
   const market = getMarket();
-  let d = await apiGet(`/api/report?market=${market}&t=${Date.now()}`);
+  let d;
+  try{
+    d = await apiGet(`/api/report?market=${market}&t=${Date.now()}`);
+  }catch(e){
+    showProgress('아직 저장된 분석 결과가 없어요. "새로 조회"를 눌러 분석을 시작하세요.');
+    return;
+  }
+
   if(d.status==='running' || d.__status===202){
     const pr = d.progress || {};
-    showProgress(`⏳ 분석 시작... ${pr.done ?? 0}/${pr.total ?? 0} (${pr.progressPct ?? 0}%)`);
+    showProgress(`⏳ 분석 중... ${pr.done ?? 0}/${pr.total ?? 0} (${pr.progressPct ?? 0}%)`);
     await waitReportReady(market);
     d = await apiGet(`/api/report?market=${market}&t=${Date.now()}`);
   }
