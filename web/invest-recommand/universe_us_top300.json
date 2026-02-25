@@ -1,0 +1,1802 @@
+[
+  {
+    "symbol": "NVDA",
+    "name": "NVIDIA",
+    "category": "us-stock",
+    "marketCap": 4695319379968
+  },
+  {
+    "symbol": "AAPL",
+    "name": "Apple",
+    "category": "us-stock",
+    "marketCap": 3999893815296
+  },
+  {
+    "symbol": "GOOG",
+    "name": "Alphabet (Google)",
+    "category": "us-stock",
+    "marketCap": 3761199644672
+  },
+  {
+    "symbol": "MSFT",
+    "name": "Microsoft",
+    "category": "us-stock",
+    "marketCap": 2891195088896
+  },
+  {
+    "symbol": "AMZN",
+    "name": "Amazon",
+    "category": "us-stock",
+    "marketCap": 2238874910720
+  },
+  {
+    "symbol": "META",
+    "name": "Meta Platforms (Facebook)",
+    "category": "us-stock",
+    "marketCap": 1617144709120
+  },
+  {
+    "symbol": "AVGO",
+    "name": "Broadcom",
+    "category": "us-stock",
+    "marketCap": 1543237140480
+  },
+  {
+    "symbol": "TSLA",
+    "name": "Tesla",
+    "category": "us-stock",
+    "marketCap": 1536170524672
+  },
+  {
+    "symbol": "BRK-B",
+    "name": "Berkshire Hathaway",
+    "category": "us-stock",
+    "marketCap": 1066823647232
+  },
+  {
+    "symbol": "WMT",
+    "name": "Walmart",
+    "category": "us-stock",
+    "marketCap": 1010558894080
+  },
+  {
+    "symbol": "LLY",
+    "name": "Eli Lilly",
+    "category": "us-stock",
+    "marketCap": 983119953920
+  },
+  {
+    "symbol": "JPM",
+    "name": "JPMorgan Chase",
+    "category": "us-stock",
+    "marketCap": 801827717120
+  },
+  {
+    "symbol": "XOM",
+    "name": "Exxon Mobil",
+    "category": "us-stock",
+    "marketCap": 629454077952
+  },
+  {
+    "symbol": "JNJ",
+    "name": "Johnson & Johnson",
+    "category": "us-stock",
+    "marketCap": 593509941248
+  },
+  {
+    "symbol": "V",
+    "name": "Visa",
+    "category": "us-stock",
+    "marketCap": 592332324864
+  },
+  {
+    "symbol": "MU",
+    "name": "Micron Technology",
+    "category": "us-stock",
+    "marketCap": 470474129408
+  },
+  {
+    "symbol": "MA",
+    "name": "Mastercard",
+    "category": "us-stock",
+    "marketCap": 444433956864
+  },
+  {
+    "symbol": "COST",
+    "name": "Costco",
+    "category": "us-stock",
+    "marketCap": 443260665856
+  },
+  {
+    "symbol": "ORCL",
+    "name": "Oracle",
+    "category": "us-stock",
+    "marketCap": 420019666944
+  },
+  {
+    "symbol": "ABBV",
+    "name": "AbbVie",
+    "category": "us-stock",
+    "marketCap": 403741343744
+  },
+  {
+    "symbol": "PG",
+    "name": "Procter & Gamble",
+    "category": "us-stock",
+    "marketCap": 386215313408
+  },
+  {
+    "symbol": "HD",
+    "name": "Home Depot",
+    "category": "us-stock",
+    "marketCap": 382754258944
+  },
+  {
+    "symbol": "CVX",
+    "name": "Chevron",
+    "category": "us-stock",
+    "marketCap": 370560204800
+  },
+  {
+    "symbol": "BAC",
+    "name": "Bank of America",
+    "category": "us-stock",
+    "marketCap": 368118824960
+  },
+  {
+    "symbol": "GE",
+    "name": "General Electric",
+    "category": "us-stock",
+    "marketCap": 364585877504
+  },
+  {
+    "symbol": "CAT",
+    "name": "Caterpillar",
+    "category": "us-stock",
+    "marketCap": 359515947008
+  },
+  {
+    "symbol": "AMD",
+    "name": "AMD",
+    "category": "us-stock",
+    "marketCap": 348647063552
+  },
+  {
+    "symbol": "KO",
+    "name": "Coca-Cola",
+    "category": "us-stock",
+    "marketCap": 347225882624
+  },
+  {
+    "symbol": "NFLX",
+    "name": "Netflix",
+    "category": "us-stock",
+    "marketCap": 331037048832
+  },
+  {
+    "symbol": "MRK",
+    "name": "Merck",
+    "category": "us-stock",
+    "marketCap": 309550284800
+  },
+  {
+    "symbol": "CSCO",
+    "name": "Cisco",
+    "category": "us-stock",
+    "marketCap": 308738523136
+  },
+  {
+    "symbol": "PLTR",
+    "name": "Palantir",
+    "category": "us-stock",
+    "marketCap": 308143489024
+  },
+  {
+    "symbol": "LRCX",
+    "name": "Lam Research",
+    "category": "us-stock",
+    "marketCap": 306785320960
+  },
+  {
+    "symbol": "AMAT",
+    "name": "Applied Materials",
+    "category": "us-stock",
+    "marketCap": 299971149824
+  },
+  {
+    "symbol": "PM",
+    "name": "Philip Morris International",
+    "category": "us-stock",
+    "marketCap": 291099082752
+  },
+  {
+    "symbol": "GS",
+    "name": "Goldman Sachs",
+    "category": "us-stock",
+    "marketCap": 273136156672
+  },
+  {
+    "symbol": "MS",
+    "name": "Morgan Stanley",
+    "category": "us-stock",
+    "marketCap": 268259508224
+  },
+  {
+    "symbol": "RTX",
+    "name": "RTX",
+    "category": "us-stock",
+    "marketCap": 266390405120
+  },
+  {
+    "symbol": "WFC",
+    "name": "Wells Fargo",
+    "category": "us-stock",
+    "marketCap": 265472376832
+  },
+  {
+    "symbol": "TMUS",
+    "name": "T-Mobile US",
+    "category": "us-stock",
+    "marketCap": 248286101504
+  },
+  {
+    "symbol": "UNH",
+    "name": "UnitedHealth",
+    "category": "us-stock",
+    "marketCap": 248154488832
+  },
+  {
+    "symbol": "GEV",
+    "name": "GE Vernova",
+    "category": "us-stock",
+    "marketCap": 238688731136
+  },
+  {
+    "symbol": "MCD",
+    "name": "McDonald",
+    "category": "us-stock",
+    "marketCap": 237665943552
+  },
+  {
+    "symbol": "PEP",
+    "name": "Pepsico",
+    "category": "us-stock",
+    "marketCap": 231818838016
+  },
+  {
+    "symbol": "INTC",
+    "name": "Intel",
+    "category": "us-stock",
+    "marketCap": 230377619456
+  },
+  {
+    "symbol": "AXP",
+    "name": "American Express",
+    "category": "us-stock",
+    "marketCap": 220763176960
+  },
+  {
+    "symbol": "IBM",
+    "name": "IBM",
+    "category": "us-stock",
+    "marketCap": 214353494016
+  },
+  {
+    "symbol": "VZ",
+    "name": "Verizon",
+    "category": "us-stock",
+    "marketCap": 210293735424
+  },
+  {
+    "symbol": "AMGN",
+    "name": "Amgen",
+    "category": "us-stock",
+    "marketCap": 206392819712
+  },
+  {
+    "symbol": "T",
+    "name": "AT&T",
+    "category": "us-stock",
+    "marketCap": 200985903104
+  },
+  {
+    "symbol": "ABT",
+    "name": "Abbott Laboratories",
+    "category": "us-stock",
+    "marketCap": 199421788160
+  },
+  {
+    "symbol": "NEE",
+    "name": "Nextera Energy",
+    "category": "us-stock",
+    "marketCap": 199351386112
+  },
+  {
+    "symbol": "KLAC",
+    "name": "KLA",
+    "category": "us-stock",
+    "marketCap": 197962268672
+  },
+  {
+    "symbol": "C",
+    "name": "Citigroup",
+    "category": "us-stock",
+    "marketCap": 196032004096
+  },
+  {
+    "symbol": "TXN",
+    "name": "Texas Instruments",
+    "category": "us-stock",
+    "marketCap": 193854734336
+  },
+  {
+    "symbol": "TMO",
+    "name": "Thermo Fisher Scientific",
+    "category": "us-stock",
+    "marketCap": 193715060736
+  },
+  {
+    "symbol": "DIS",
+    "name": "Walt Disney",
+    "category": "us-stock",
+    "marketCap": 188067692544
+  },
+  {
+    "symbol": "APH",
+    "name": "Amphenol",
+    "category": "us-stock",
+    "marketCap": 186226065408
+  },
+  {
+    "symbol": "BA",
+    "name": "Boeing",
+    "category": "us-stock",
+    "marketCap": 183292149760
+  },
+  {
+    "symbol": "GILD",
+    "name": "Gilead Sciences",
+    "category": "us-stock",
+    "marketCap": 183173939200
+  },
+  {
+    "symbol": "CRM",
+    "name": "Salesforce",
+    "category": "us-stock",
+    "marketCap": 176519839744
+  },
+  {
+    "symbol": "TJX",
+    "name": "TJX Companies",
+    "category": "us-stock",
+    "marketCap": 175465922560
+  },
+  {
+    "symbol": "ISRG",
+    "name": "Intuitive Surgical",
+    "category": "us-stock",
+    "marketCap": 175441444864
+  },
+  {
+    "symbol": "DE",
+    "name": "Deere &amp; Company (John Deere)",
+    "category": "us-stock",
+    "marketCap": 174718337024
+  },
+  {
+    "symbol": "ADI",
+    "name": "Analog Devices",
+    "category": "us-stock",
+    "marketCap": 174360936448
+  },
+  {
+    "symbol": "SCCO",
+    "name": "Southern Copper",
+    "category": "us-stock",
+    "marketCap": 174043070464
+  },
+  {
+    "symbol": "SCHW",
+    "name": "Charles Schwab",
+    "category": "us-stock",
+    "marketCap": 169033236480
+  },
+  {
+    "symbol": "BLK",
+    "name": "BlackRock",
+    "category": "us-stock",
+    "marketCap": 167725907968
+  },
+  {
+    "symbol": "HON",
+    "name": "Honeywell",
+    "category": "us-stock",
+    "marketCap": 164161404928
+  },
+  {
+    "symbol": "ANET",
+    "name": "Arista Networks",
+    "category": "us-stock",
+    "marketCap": 162158149632
+  },
+  {
+    "symbol": "UNP",
+    "name": "Union Pacific Corporation",
+    "category": "us-stock",
+    "marketCap": 158233772032
+  },
+  {
+    "symbol": "LOW",
+    "name": "Lowe's Companies",
+    "category": "us-stock",
+    "marketCap": 156275474432
+  },
+  {
+    "symbol": "QCOM",
+    "name": "QUALCOMM",
+    "category": "us-stock",
+    "marketCap": 154631569408
+  },
+  {
+    "symbol": "PFE",
+    "name": "Pfizer",
+    "category": "us-stock",
+    "marketCap": 154310098944
+  },
+  {
+    "symbol": "LMT",
+    "name": "Lockheed Martin",
+    "category": "us-stock",
+    "marketCap": 153747636224
+  },
+  {
+    "symbol": "UBER",
+    "name": "Uber",
+    "category": "us-stock",
+    "marketCap": 148315521024
+  },
+  {
+    "symbol": "DHR",
+    "name": "Danaher",
+    "category": "us-stock",
+    "marketCap": 147876413440
+  },
+  {
+    "symbol": "WELL",
+    "name": "Welltower",
+    "category": "us-stock",
+    "marketCap": 146039603200
+  },
+  {
+    "symbol": "SYK",
+    "name": "Stryker Corporation",
+    "category": "us-stock",
+    "marketCap": 145930665984
+  },
+  {
+    "symbol": "BX",
+    "name": "Blackstone Group",
+    "category": "us-stock",
+    "marketCap": 143142240256
+  },
+  {
+    "symbol": "NEM",
+    "name": "Newmont",
+    "category": "us-stock",
+    "marketCap": 136306614272
+  },
+  {
+    "symbol": "COP",
+    "name": "ConocoPhillips",
+    "category": "us-stock",
+    "marketCap": 135178485760
+  },
+  {
+    "symbol": "APP",
+    "name": "AppLovin",
+    "category": "us-stock",
+    "marketCap": 133031436288
+  },
+  {
+    "symbol": "BKNG",
+    "name": "Booking Holdings (Booking.com)",
+    "category": "us-stock",
+    "marketCap": 131861569536
+  },
+  {
+    "symbol": "PLD",
+    "name": "Prologis",
+    "category": "us-stock",
+    "marketCap": 130417123328
+  },
+  {
+    "symbol": "GLW",
+    "name": "Corning",
+    "category": "us-stock",
+    "marketCap": 130056347648
+  },
+  {
+    "symbol": "PH",
+    "name": "Parker-Hannifin",
+    "category": "us-stock",
+    "marketCap": 129122033664
+  },
+  {
+    "symbol": "SPGI",
+    "name": "S&P Global",
+    "category": "us-stock",
+    "marketCap": 126652153856
+  },
+  {
+    "symbol": "BMY",
+    "name": "Bristol-Myers Squibb",
+    "category": "us-stock",
+    "marketCap": 125446774784
+  },
+  {
+    "symbol": "COF",
+    "name": "Capital One",
+    "category": "us-stock",
+    "marketCap": 124959801344
+  },
+  {
+    "symbol": "VRTX",
+    "name": "Vertex Pharmaceuticals",
+    "category": "us-stock",
+    "marketCap": 123823882240
+  },
+  {
+    "symbol": "IBKR",
+    "name": "Interactive Brokers",
+    "category": "us-stock",
+    "marketCap": 122259505152
+  },
+  {
+    "symbol": "PGR",
+    "name": "Progressive",
+    "category": "us-stock",
+    "marketCap": 120804098048
+  },
+  {
+    "symbol": "MCK",
+    "name": "McKesson",
+    "category": "us-stock",
+    "marketCap": 118163734528
+  },
+  {
+    "symbol": "HCA",
+    "name": "HCA Healthcare",
+    "category": "us-stock",
+    "marketCap": 117741568000
+  },
+  {
+    "symbol": "MO",
+    "name": "Altria Group",
+    "category": "us-stock",
+    "marketCap": 116248010752
+  },
+  {
+    "symbol": "PANW",
+    "name": "Palo Alto Networks",
+    "category": "us-stock",
+    "marketCap": 115602718720
+  },
+  {
+    "symbol": "CMCSA",
+    "name": "Comcast",
+    "category": "us-stock",
+    "marketCap": 115183509504
+  },
+  {
+    "symbol": "CME",
+    "name": "CME Group",
+    "category": "us-stock",
+    "marketCap": 114695241728
+  },
+  {
+    "symbol": "CEG",
+    "name": "Constellation Energy",
+    "category": "us-stock",
+    "marketCap": 113266376704
+  },
+  {
+    "symbol": "BSX",
+    "name": "Boston Scientific",
+    "category": "us-stock",
+    "marketCap": 111513993216
+  },
+  {
+    "symbol": "SBUX",
+    "name": "Starbucks",
+    "category": "us-stock",
+    "marketCap": 109953843200
+  },
+  {
+    "symbol": "NOW",
+    "name": "ServiceNow",
+    "category": "us-stock",
+    "marketCap": 108141600768
+  },
+  {
+    "symbol": "ADBE",
+    "name": "Adobe",
+    "category": "us-stock",
+    "marketCap": 106814160896
+  },
+  {
+    "symbol": "SO",
+    "name": "Southern Company",
+    "category": "us-stock",
+    "marketCap": 105496854528
+  },
+  {
+    "symbol": "HWM",
+    "name": "Howmet Aerospace",
+    "category": "us-stock",
+    "marketCap": 105032376320
+  },
+  {
+    "symbol": "NOC",
+    "name": "Northrop Grumman",
+    "category": "us-stock",
+    "marketCap": 103861665792
+  },
+  {
+    "symbol": "DUK",
+    "name": "Duke Energy",
+    "category": "us-stock",
+    "marketCap": 99898368000
+  },
+  {
+    "symbol": "INTU",
+    "name": "Intuit",
+    "category": "us-stock",
+    "marketCap": 99864862720
+  },
+  {
+    "symbol": "UPS",
+    "name": "United Parcel Service",
+    "category": "us-stock",
+    "marketCap": 97960861696
+  },
+  {
+    "symbol": "FCX",
+    "name": "Freeport-McMoRan",
+    "category": "us-stock",
+    "marketCap": 97557241856
+  },
+  {
+    "symbol": "VRT",
+    "name": "Vertiv Holdings",
+    "category": "us-stock",
+    "marketCap": 96854802432
+  },
+  {
+    "symbol": "GD",
+    "name": "General Dynamics",
+    "category": "us-stock",
+    "marketCap": 94955470848
+  },
+  {
+    "symbol": "NKE",
+    "name": "Nike",
+    "category": "us-stock",
+    "marketCap": 94877761536
+  },
+  {
+    "symbol": "CVS",
+    "name": "CVS Health",
+    "category": "us-stock",
+    "marketCap": 94372618240
+  },
+  {
+    "symbol": "SNDK",
+    "name": "Sandisk",
+    "category": "us-stock",
+    "marketCap": 94224646144
+  },
+  {
+    "symbol": "EQIX",
+    "name": "Equinix",
+    "category": "us-stock",
+    "marketCap": 93528866816
+  },
+  {
+    "symbol": "WM",
+    "name": "Waste Management",
+    "category": "us-stock",
+    "marketCap": 92597829632
+  },
+  {
+    "symbol": "WDC",
+    "name": "Western Digital",
+    "category": "us-stock",
+    "marketCap": 92507693056
+  },
+  {
+    "symbol": "FDX",
+    "name": "FedEx",
+    "category": "us-stock",
+    "marketCap": 91210940416
+  },
+  {
+    "symbol": "SHW",
+    "name": "Sherwin-Williams",
+    "category": "us-stock",
+    "marketCap": 90939342848
+  },
+  {
+    "symbol": "MAR",
+    "name": "Marriott International",
+    "category": "us-stock",
+    "marketCap": 90929446912
+  },
+  {
+    "symbol": "MMC",
+    "name": "Marsh & McLennan Companies",
+    "category": "us-stock",
+    "marketCap": 89819709440
+  },
+  {
+    "symbol": "WMB",
+    "name": "Williams Companies",
+    "category": "us-stock",
+    "marketCap": 89816997888
+  },
+  {
+    "symbol": "AMT",
+    "name": "American Tower",
+    "category": "us-stock",
+    "marketCap": 89056706560
+  },
+  {
+    "symbol": "KKR",
+    "name": "KKR & Co.",
+    "category": "us-stock",
+    "marketCap": 88638676992
+  },
+  {
+    "symbol": "ICE",
+    "name": "Intercontinental Exchange",
+    "category": "us-stock",
+    "marketCap": 88582938624
+  },
+  {
+    "symbol": "CRWD",
+    "name": "CrowdStrike",
+    "category": "us-stock",
+    "marketCap": 88297472000
+  },
+  {
+    "symbol": "PNC",
+    "name": "PNC Financial Services",
+    "category": "us-stock",
+    "marketCap": 88104042496
+  },
+  {
+    "symbol": "MMM",
+    "name": "3M",
+    "category": "us-stock",
+    "marketCap": 87674486784
+  },
+  {
+    "symbol": "ECL",
+    "name": "Ecolab",
+    "category": "us-stock",
+    "marketCap": 87401848832
+  },
+  {
+    "symbol": "RCL",
+    "name": "Royal Caribbean Group",
+    "category": "us-stock",
+    "marketCap": 86313648128
+  },
+  {
+    "symbol": "USB",
+    "name": "U.S. Bancorp",
+    "category": "us-stock",
+    "marketCap": 85571649536
+  },
+  {
+    "symbol": "ITW",
+    "name": "Illinois Tool Works",
+    "category": "us-stock",
+    "marketCap": 84892188672
+  },
+  {
+    "symbol": "EMR",
+    "name": "Emerson",
+    "category": "us-stock",
+    "marketCap": 84840136704
+  },
+  {
+    "symbol": "PWR",
+    "name": "Quanta Services",
+    "category": "us-stock",
+    "marketCap": 84729143296
+  },
+  {
+    "symbol": "SNPS",
+    "name": "Synopsys",
+    "category": "us-stock",
+    "marketCap": 84317757440
+  },
+  {
+    "symbol": "MNST",
+    "name": "Monster Beverage",
+    "category": "us-stock",
+    "marketCap": 83574390784
+  },
+  {
+    "symbol": "ADP",
+    "name": "Automatic Data Processing",
+    "category": "us-stock",
+    "marketCap": 83187015680
+  },
+  {
+    "symbol": "CMI",
+    "name": "Cummins",
+    "category": "us-stock",
+    "marketCap": 82965594112
+  },
+  {
+    "symbol": "REGN",
+    "name": "Regeneron Pharmaceuticals",
+    "category": "us-stock",
+    "marketCap": 81635778560
+  },
+  {
+    "symbol": "BK",
+    "name": "BNY Mellon (Bank of New York Mellon)",
+    "category": "us-stock",
+    "marketCap": 81276043264
+  },
+  {
+    "symbol": "MCO",
+    "name": "Moody's",
+    "category": "us-stock",
+    "marketCap": 81172340736
+  },
+  {
+    "symbol": "DELL",
+    "name": "Dell",
+    "category": "us-stock",
+    "marketCap": 80276578304
+  },
+  {
+    "symbol": "CTAS",
+    "name": "Cintas",
+    "category": "us-stock",
+    "marketCap": 79790628864
+  },
+  {
+    "symbol": "ORLY",
+    "name": "O'Reilly Automotive",
+    "category": "us-stock",
+    "marketCap": 79624339456
+  },
+  {
+    "symbol": "CL",
+    "name": "Colgate-Palmolive",
+    "category": "us-stock",
+    "marketCap": 79294545920
+  },
+  {
+    "symbol": "CDNS",
+    "name": "Cadence Design Systems",
+    "category": "us-stock",
+    "marketCap": 79193767936
+  },
+  {
+    "symbol": "CSX",
+    "name": "CSX Corporation",
+    "category": "us-stock",
+    "marketCap": 78975377408
+  },
+  {
+    "symbol": "MDLZ",
+    "name": "Mondelez International",
+    "category": "us-stock",
+    "marketCap": 78879621120
+  },
+  {
+    "symbol": "EPD",
+    "name": "Enterprise Products",
+    "category": "us-stock",
+    "marketCap": 78576836608
+  },
+  {
+    "symbol": "MSI",
+    "name": "Motorola Solutions",
+    "category": "us-stock",
+    "marketCap": 78422417408
+  },
+  {
+    "symbol": "SLB",
+    "name": "SLB (Schlumberger)",
+    "category": "us-stock",
+    "marketCap": 77532930048
+  },
+  {
+    "symbol": "GM",
+    "name": "General Motors",
+    "category": "us-stock",
+    "marketCap": 75832295424
+  },
+  {
+    "symbol": "ABNB",
+    "name": "Airbnb",
+    "category": "us-stock",
+    "marketCap": 75334926336
+  },
+  {
+    "symbol": "SPG",
+    "name": "Simon Property Group",
+    "category": "us-stock",
+    "marketCap": 75202781184
+  },
+  {
+    "symbol": "CI",
+    "name": "The Cigna Group",
+    "category": "us-stock",
+    "marketCap": 75062353920
+  },
+  {
+    "symbol": "TDG",
+    "name": "TransDigm Group",
+    "category": "us-stock",
+    "marketCap": 73069453312
+  },
+  {
+    "symbol": "KMI",
+    "name": "Kinder Morgan",
+    "category": "us-stock",
+    "marketCap": 72728920064
+  },
+  {
+    "symbol": "HLT",
+    "name": "Hilton Worldwide",
+    "category": "us-stock",
+    "marketCap": 72701075456
+  },
+  {
+    "symbol": "WBD",
+    "name": "Warner Bros. Discovery",
+    "category": "us-stock",
+    "marketCap": 72277032960
+  },
+  {
+    "symbol": "ELV",
+    "name": "Elevance Health",
+    "category": "us-stock",
+    "marketCap": 72201330688
+  },
+  {
+    "symbol": "AEP",
+    "name": "American Electric Power",
+    "category": "us-stock",
+    "marketCap": 71604658176
+  },
+  {
+    "symbol": "CVNA",
+    "name": "Carvana",
+    "category": "us-stock",
+    "marketCap": 71256432640
+  },
+  {
+    "symbol": "NSC",
+    "name": "Norfolk Southern",
+    "category": "us-stock",
+    "marketCap": 70984974336
+  },
+  {
+    "symbol": "COR",
+    "name": "Cencora",
+    "category": "us-stock",
+    "marketCap": 70883090432
+  },
+  {
+    "symbol": "DASH",
+    "name": "DoorDash",
+    "category": "us-stock",
+    "marketCap": 70847537152
+  },
+  {
+    "symbol": "RSG",
+    "name": "Republic Services",
+    "category": "us-stock",
+    "marketCap": 68333068288
+  },
+  {
+    "symbol": "TRV",
+    "name": "The Travelers Companies",
+    "category": "us-stock",
+    "marketCap": 68130258944
+  },
+  {
+    "symbol": "EOG",
+    "name": "EOG Resources",
+    "category": "us-stock",
+    "marketCap": 67539382272
+  },
+  {
+    "symbol": "MRVL",
+    "name": "Marvell Technology",
+    "category": "us-stock",
+    "marketCap": 66482556928
+  },
+  {
+    "symbol": "PCAR",
+    "name": "Paccar",
+    "category": "us-stock",
+    "marketCap": 66394173440
+  },
+  {
+    "symbol": "LHX",
+    "name": "L3Harris Technologies",
+    "category": "us-stock",
+    "marketCap": 66267209728
+  },
+  {
+    "symbol": "APO",
+    "name": "Apollo Global Management",
+    "category": "us-stock",
+    "marketCap": 66243629056
+  },
+  {
+    "symbol": "BDX",
+    "name": "Becton Dickinson",
+    "category": "us-stock",
+    "marketCap": 66115235840
+  },
+  {
+    "symbol": "HOOD",
+    "name": "Robinhood",
+    "category": "us-stock",
+    "marketCap": 66073632768
+  },
+  {
+    "symbol": "ROST",
+    "name": "Ross Stores",
+    "category": "us-stock",
+    "marketCap": 65224130560
+  },
+  {
+    "symbol": "ET",
+    "name": "Energy Transfer LP",
+    "category": "us-stock",
+    "marketCap": 64677912576
+  },
+  {
+    "symbol": "BKR",
+    "name": "Baker Hughes",
+    "category": "us-stock",
+    "marketCap": 63958667264
+  },
+  {
+    "symbol": "TFC",
+    "name": "Truist Financial Corporation",
+    "category": "us-stock",
+    "marketCap": 63527374848
+  },
+  {
+    "symbol": "AZO",
+    "name": "AutoZone",
+    "category": "us-stock",
+    "marketCap": 62944985088
+  },
+  {
+    "symbol": "PSX",
+    "name": "Phillips 66",
+    "category": "us-stock",
+    "marketCap": 62380621824
+  },
+  {
+    "symbol": "DLR",
+    "name": "Digital Realty",
+    "category": "us-stock",
+    "marketCap": 62349148160
+  },
+  {
+    "symbol": "APD",
+    "name": "Air Products and Chemicals",
+    "category": "us-stock",
+    "marketCap": 62225674240
+  },
+  {
+    "symbol": "VLO",
+    "name": "Valero Energy",
+    "category": "us-stock",
+    "marketCap": 61922213888
+  },
+  {
+    "symbol": "SRE",
+    "name": "Sempra",
+    "category": "us-stock",
+    "marketCap": 61332484096
+  },
+  {
+    "symbol": "O",
+    "name": "Realty Income",
+    "category": "us-stock",
+    "marketCap": 61072392192
+  },
+  {
+    "symbol": "MPLX",
+    "name": "MPLX",
+    "category": "us-stock",
+    "marketCap": 59894964224
+  },
+  {
+    "symbol": "MPWR",
+    "name": "Monolithic Power Systems",
+    "category": "us-stock",
+    "marketCap": 59116654592
+  },
+  {
+    "symbol": "AFL",
+    "name": "Aflac",
+    "category": "us-stock",
+    "marketCap": 58941849600
+  },
+  {
+    "symbol": "MPC",
+    "name": "Marathon Petroleum",
+    "category": "us-stock",
+    "marketCap": 58704658432
+  },
+  {
+    "symbol": "VST",
+    "name": "Vistra",
+    "category": "us-stock",
+    "marketCap": 58149232640
+  },
+  {
+    "symbol": "FTNT",
+    "name": "Fortinet",
+    "category": "us-stock",
+    "marketCap": 57646198784
+  },
+  {
+    "symbol": "NET",
+    "name": "Cloudflare",
+    "category": "us-stock",
+    "marketCap": 57642610688
+  },
+  {
+    "symbol": "URI",
+    "name": "United Rentals",
+    "category": "us-stock",
+    "marketCap": 57068605440
+  },
+  {
+    "symbol": "ZTS",
+    "name": "Zoetis",
+    "category": "us-stock",
+    "marketCap": 56699592704
+  },
+  {
+    "symbol": "F",
+    "name": "Ford",
+    "category": "us-stock",
+    "marketCap": 56650547200
+  },
+  {
+    "symbol": "AJG",
+    "name": "Arthur J. Gallagher & Co.",
+    "category": "us-stock",
+    "marketCap": 55528456192
+  },
+  {
+    "symbol": "SNOW",
+    "name": "Snowflake",
+    "category": "us-stock",
+    "marketCap": 55114731520
+  },
+  {
+    "symbol": "ALL",
+    "name": "Allstate",
+    "category": "us-stock",
+    "marketCap": 54906056704
+  },
+  {
+    "symbol": "AME",
+    "name": "Ametek",
+    "category": "us-stock",
+    "marketCap": 54521483264
+  },
+  {
+    "symbol": "D",
+    "name": "Dominion Energy",
+    "category": "us-stock",
+    "marketCap": 54428434432
+  },
+  {
+    "symbol": "GWW",
+    "name": "W. W. Grainger",
+    "category": "us-stock",
+    "marketCap": 53891637248
+  },
+  {
+    "symbol": "PSA",
+    "name": "Public Storage",
+    "category": "us-stock",
+    "marketCap": 53373263872
+  },
+  {
+    "symbol": "CAH",
+    "name": "Cardinal Health",
+    "category": "us-stock",
+    "marketCap": 53174362112
+  },
+  {
+    "symbol": "CARR",
+    "name": "Carrier Global",
+    "category": "us-stock",
+    "marketCap": 53101162496
+  },
+  {
+    "symbol": "CTVA",
+    "name": "Corteva",
+    "category": "us-stock",
+    "marketCap": 52686823424
+  },
+  {
+    "symbol": "TGT",
+    "name": "Target",
+    "category": "us-stock",
+    "marketCap": 52492185600
+  },
+  {
+    "symbol": "TER",
+    "name": "Teradyne",
+    "category": "us-stock",
+    "marketCap": 52349509632
+  },
+  {
+    "symbol": "OKE",
+    "name": "Oneok",
+    "category": "us-stock",
+    "marketCap": 52200472576
+  },
+  {
+    "symbol": "FAST",
+    "name": "Fastenal",
+    "category": "us-stock",
+    "marketCap": 52196225024
+  },
+  {
+    "symbol": "IDXX",
+    "name": "IDEXX Laboratories",
+    "category": "us-stock",
+    "marketCap": 51941445632
+  },
+  {
+    "symbol": "FIX",
+    "name": "Comfort Systems USA",
+    "category": "us-stock",
+    "marketCap": 51813634048
+  },
+  {
+    "symbol": "KEYS",
+    "name": "Keysight",
+    "category": "us-stock",
+    "marketCap": 51799429120
+  },
+  {
+    "symbol": "CRWV",
+    "name": "CoreWeave",
+    "category": "us-stock",
+    "marketCap": 51760451584
+  },
+  {
+    "symbol": "OXY",
+    "name": "Occidental Petroleum",
+    "category": "us-stock",
+    "marketCap": 51236552704
+  },
+  {
+    "symbol": "EA",
+    "name": "Electronic Arts",
+    "category": "us-stock",
+    "marketCap": 50300997632
+  },
+  {
+    "symbol": "RKT",
+    "name": "Rocket Companies",
+    "category": "us-stock",
+    "marketCap": 49869406208
+  },
+  {
+    "symbol": "TRGP",
+    "name": "Targa Resources",
+    "category": "us-stock",
+    "marketCap": 49864257536
+  },
+  {
+    "symbol": "EXC",
+    "name": "Exelon Corporation",
+    "category": "us-stock",
+    "marketCap": 49702350848
+  },
+  {
+    "symbol": "MET",
+    "name": "MetLife",
+    "category": "us-stock",
+    "marketCap": 49640894464
+  },
+  {
+    "symbol": "XEL",
+    "name": "Xcel Energy",
+    "category": "us-stock",
+    "marketCap": 49636106240
+  },
+  {
+    "symbol": "FANG",
+    "name": "Diamondback Energy",
+    "category": "us-stock",
+    "marketCap": 49431396352
+  },
+  {
+    "symbol": "LITE",
+    "name": "Lumentum",
+    "category": "us-stock",
+    "marketCap": 49142480896
+  },
+  {
+    "symbol": "HEI",
+    "name": "HEICO",
+    "category": "us-stock",
+    "marketCap": 48882556928
+  },
+  {
+    "symbol": "LNG",
+    "name": "Cheniere Energy",
+    "category": "us-stock",
+    "marketCap": 48559960064
+  },
+  {
+    "symbol": "CIEN",
+    "name": "Ciena",
+    "category": "us-stock",
+    "marketCap": 48479526912
+  },
+  {
+    "symbol": "EW",
+    "name": "Edwards Lifesciences",
+    "category": "us-stock",
+    "marketCap": 48377044992
+  },
+  {
+    "symbol": "CMG",
+    "name": "Chipotle Mexican Grill",
+    "category": "us-stock",
+    "marketCap": 48249925632
+  },
+  {
+    "symbol": "COHR",
+    "name": "Coherent Corp.",
+    "category": "us-stock",
+    "marketCap": 47781625856
+  },
+  {
+    "symbol": "DHI",
+    "name": "D. R. Horton",
+    "category": "us-stock",
+    "marketCap": 47725768704
+  },
+  {
+    "symbol": "ETR",
+    "name": "Entergy",
+    "category": "us-stock",
+    "marketCap": 47586099200
+  },
+  {
+    "symbol": "RBLX",
+    "name": "Roblox",
+    "category": "us-stock",
+    "marketCap": 47547084800
+  },
+  {
+    "symbol": "ADSK",
+    "name": "Autodesk",
+    "category": "us-stock",
+    "marketCap": 47053832192
+  },
+  {
+    "symbol": "HSY",
+    "name": "The Hershey Company",
+    "category": "us-stock",
+    "marketCap": 46683164672
+  },
+  {
+    "symbol": "BE",
+    "name": "Bloom Energy",
+    "category": "us-stock",
+    "marketCap": 46627115008
+  },
+  {
+    "symbol": "NDAQ",
+    "name": "Nasdaq",
+    "category": "us-stock",
+    "marketCap": 46313443328
+  },
+  {
+    "symbol": "KR",
+    "name": "Kroger",
+    "category": "us-stock",
+    "marketCap": 46228434944
+  },
+  {
+    "symbol": "YUM",
+    "name": "Yum! Brands",
+    "category": "us-stock",
+    "marketCap": 46076485632
+  },
+  {
+    "symbol": "UI",
+    "name": "Ubiquiti",
+    "category": "us-stock",
+    "marketCap": 45916520448
+  },
+  {
+    "symbol": "ROK",
+    "name": "Rockwell Automation",
+    "category": "us-stock",
+    "marketCap": 45569167360
+  },
+  {
+    "symbol": "DAL",
+    "name": "Delta Air Lines",
+    "category": "us-stock",
+    "marketCap": 45216239616
+  },
+  {
+    "symbol": "WAB",
+    "name": "Wabtec",
+    "category": "us-stock",
+    "marketCap": 45213044736
+  },
+  {
+    "symbol": "FITB",
+    "name": "Fifth Third Bank",
+    "category": "us-stock",
+    "marketCap": 45182431232
+  },
+  {
+    "symbol": "ALNY",
+    "name": "Alnylam Pharmaceuticals",
+    "category": "us-stock",
+    "marketCap": 44143616000
+  },
+  {
+    "symbol": "PYPL",
+    "name": "PayPal",
+    "category": "us-stock",
+    "marketCap": 43994357760
+  },
+  {
+    "symbol": "CCL",
+    "name": "Carnival Corporation",
+    "category": "us-stock",
+    "marketCap": 43695042560
+  },
+  {
+    "symbol": "COIN",
+    "name": "Coinbase",
+    "category": "us-stock",
+    "marketCap": 43692621824
+  },
+  {
+    "symbol": "CBRE",
+    "name": "CBRE Group",
+    "category": "us-stock",
+    "marketCap": 43499167744
+  },
+  {
+    "symbol": "AMP",
+    "name": "Ameriprise Financial",
+    "category": "us-stock",
+    "marketCap": 43316359168
+  },
+  {
+    "symbol": "AIG",
+    "name": "American International Group",
+    "category": "us-stock",
+    "marketCap": 43079749632
+  },
+  {
+    "symbol": "PEG",
+    "name": "PSEG",
+    "category": "us-stock",
+    "marketCap": 43047038976
+  },
+  {
+    "symbol": "SYY",
+    "name": "Sysco",
+    "category": "us-stock",
+    "marketCap": 43041501184
+  },
+  {
+    "symbol": "WCN",
+    "name": "Waste Connections",
+    "category": "us-stock",
+    "marketCap": 42302136320
+  },
+  {
+    "symbol": "KDP",
+    "name": "Keurig Dr Pepper",
+    "category": "us-stock",
+    "marketCap": 42156834816
+  },
+  {
+    "symbol": "MLM",
+    "name": "Martin Marietta Materials",
+    "category": "us-stock",
+    "marketCap": 42025033728
+  },
+  {
+    "symbol": "VMC",
+    "name": "Vulcan Materials",
+    "category": "us-stock",
+    "marketCap": 42003095552
+  },
+  {
+    "symbol": "EL",
+    "name": "Estee Lauder",
+    "category": "us-stock",
+    "marketCap": 41703510016
+  },
+  {
+    "symbol": "MSTR",
+    "name": "Strategy (MicroStrategy)",
+    "category": "us-stock",
+    "marketCap": 41588924416
+  },
+  {
+    "symbol": "ODFL",
+    "name": "Old Dominion Freight Line",
+    "category": "us-stock",
+    "marketCap": 41340071936
+  },
+  {
+    "symbol": "MSCI",
+    "name": "MSCI",
+    "category": "us-stock",
+    "marketCap": 41229815808
+  },
+  {
+    "symbol": "MCHP",
+    "name": "Microchip Technology",
+    "category": "us-stock",
+    "marketCap": 41088417792
+  },
+  {
+    "symbol": "VTR",
+    "name": "Ventas",
+    "category": "us-stock",
+    "marketCap": 41051242496
+  },
+  {
+    "symbol": "PCG",
+    "name": "PG&amp;E Corporation",
+    "category": "us-stock",
+    "marketCap": 41014079488
+  },
+  {
+    "symbol": "ONC",
+    "name": "BeOne Medicines",
+    "category": "us-stock",
+    "marketCap": 40832782336
+  },
+  {
+    "symbol": "MDLN",
+    "name": "Medline",
+    "category": "us-stock",
+    "marketCap": 40562794496
+  },
+  {
+    "symbol": "NUE",
+    "name": "Nucor",
+    "category": "us-stock",
+    "marketCap": 40084590592
+  },
+  {
+    "symbol": "ED",
+    "name": "Consolidated Edison",
+    "category": "us-stock",
+    "marketCap": 40067465216
+  },
+  {
+    "symbol": "NRG",
+    "name": "NRG Energy",
+    "category": "us-stock",
+    "marketCap": 39730126848
+  },
+  {
+    "symbol": "HIG",
+    "name": "The Hartford",
+    "category": "us-stock",
+    "marketCap": 39196643328
+  },
+  {
+    "symbol": "EBAY",
+    "name": "eBay",
+    "category": "us-stock",
+    "marketCap": 38982103040
+  },
+  {
+    "symbol": "CCI",
+    "name": "Crown Castle",
+    "category": "us-stock",
+    "marketCap": 38600859648
+  },
+  {
+    "symbol": "ARES",
+    "name": "Ares Management",
+    "category": "us-stock",
+    "marketCap": 38384500736
+  },
+  {
+    "symbol": "GEHC",
+    "name": "GE HealthCare Technologies",
+    "category": "us-stock",
+    "marketCap": 38305767424
+  },
+  {
+    "symbol": "TTWO",
+    "name": "Take-Two Interactive",
+    "category": "us-stock",
+    "marketCap": 37810978816
+  },
+  {
+    "symbol": "WEC",
+    "name": "WEC Energy Group",
+    "category": "us-stock",
+    "marketCap": 37720989696
+  },
+  {
+    "symbol": "RKLB",
+    "name": "Rocket Lab",
+    "category": "us-stock",
+    "marketCap": 37374918656
+  },
+  {
+    "symbol": "LVS",
+    "name": "Las Vegas Sands",
+    "category": "us-stock",
+    "marketCap": 37221199872
+  },
+  {
+    "symbol": "KMB",
+    "name": "Kimberly-Clark",
+    "category": "us-stock",
+    "marketCap": 36879892480
+  },
+  {
+    "symbol": "RMD",
+    "name": "ResMed",
+    "category": "us-stock",
+    "marketCap": 36729499648
+  },
+  {
+    "symbol": "LYV",
+    "name": "Live Nation",
+    "category": "us-stock",
+    "marketCap": 36684414976
+  },
+  {
+    "symbol": "TPL",
+    "name": "Texas Pacific Land Corporation",
+    "category": "us-stock",
+    "marketCap": 36673458176
+  },
+  {
+    "symbol": "DDOG",
+    "name": "Datadog",
+    "category": "us-stock",
+    "marketCap": 36620546048
+  },
+  {
+    "symbol": "EQT",
+    "name": "EQT Corporation",
+    "category": "us-stock",
+    "marketCap": 36463841280
+  },
+  {
+    "symbol": "UAL",
+    "name": "United Airlines Holdings",
+    "category": "us-stock",
+    "marketCap": 36449656832
+  },
+  {
+    "symbol": "KVUE",
+    "name": "Kenvue",
+    "category": "us-stock",
+    "marketCap": 36422864896
+  },
+  {
+    "symbol": "ROP",
+    "name": "Roper Technologies",
+    "category": "us-stock",
+    "marketCap": 36349161472
+  },
+  {
+    "symbol": "EME",
+    "name": "Emcor",
+    "category": "us-stock",
+    "marketCap": 36117098496
+  },
+  {
+    "symbol": "STT",
+    "name": "State Street Corporation",
+    "category": "us-stock",
+    "marketCap": 35536924672
+  },
+  {
+    "symbol": "A",
+    "name": "Agilent Technologies",
+    "category": "us-stock",
+    "marketCap": 35267260416
+  },
+  {
+    "symbol": "AXON",
+    "name": "Axon Enterprise",
+    "category": "us-stock",
+    "marketCap": 35151785984
+  },
+  {
+    "symbol": "OTIS",
+    "name": "Otis Worldwide",
+    "category": "us-stock",
+    "marketCap": 35039350784
+  },
+  {
+    "symbol": "PRU",
+    "name": "Prudential Financial",
+    "category": "us-stock",
+    "marketCap": 34935717888
+  },
+  {
+    "symbol": "GBTC",
+    "name": "Grayscale Bitcoin Trust",
+    "category": "us-stock",
+    "marketCap": 34805440512
+  },
+  {
+    "symbol": "WDAY",
+    "name": "Workday",
+    "category": "us-stock",
+    "marketCap": 34771406848
+  },
+  {
+    "symbol": "HBAN",
+    "name": "Huntington Bancshares",
+    "category": "us-stock",
+    "marketCap": 34547068928
+  },
+  {
+    "symbol": "FI",
+    "name": "Fiserv",
+    "category": "us-stock",
+    "marketCap": 34314950656
+  },
+  {
+    "symbol": "CPRT",
+    "name": "Copart",
+    "category": "us-stock",
+    "marketCap": 34151661568
+  },
+  {
+    "symbol": "MTB",
+    "name": "M&T Bank",
+    "category": "us-stock",
+    "marketCap": 34147966976
+  },
+  {
+    "symbol": "CPNG",
+    "name": "Coupang",
+    "category": "us-stock",
+    "marketCap": 33957378048
+  }
+]

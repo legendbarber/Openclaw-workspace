@@ -23,8 +23,8 @@ class Asset:
     category: str
 
 
-UNIVERSE = [
-    # US stocks
+DEFAULT_UNIVERSE = [
+    # fallback set
     Asset("NVDA", "NVIDIA Corp", "us-stock"),
     Asset("TSLA", "Tesla Inc", "us-stock"),
     Asset("AMD", "Advanced Micro Devices", "us-stock"),
@@ -35,8 +35,6 @@ UNIVERSE = [
     Asset("AMZN", "Amazon.com Inc", "us-stock"),
     Asset("COIN", "Coinbase Global", "us-stock"),
     Asset("MSTR", "MicroStrategy", "us-stock"),
-
-    # KR stocks (Yahoo Finance suffix)
     Asset("005930.KS", "Samsung Electronics", "kr-stock"),
     Asset("000660.KS", "SK hynix", "kr-stock"),
     Asset("035420.KS", "NAVER", "kr-stock"),
@@ -48,6 +46,38 @@ UNIVERSE = [
     Asset("012330.KS", "Hyundai Motor", "kr-stock"),
     Asset("034020.KS", "Doosan Enerbility", "kr-stock"),
 ]
+
+
+def _load_universe_from_files() -> List[Asset]:
+    base = Path(__file__).resolve().parent
+    us_path = base / "universe_us_top300.json"
+    kr_path = base / "universe_kr_top300.json"
+
+    items: List[Asset] = []
+    try:
+        for p in [us_path, kr_path]:
+            if not p.exists():
+                continue
+            arr = json.loads(p.read_text(encoding="utf-8"))
+            for r in arr:
+                sym = str(r.get("symbol", "")).strip().upper()
+                name = str(r.get("name", "")).strip()
+                cat = str(r.get("category", "")).strip().lower()
+                if not sym or not name or cat not in {"us-stock", "kr-stock"}:
+                    continue
+                items.append(Asset(sym, name, cat))
+    except Exception:
+        return DEFAULT_UNIVERSE
+
+    # dedupe by symbol
+    uniq = {}
+    for a in items:
+        uniq[a.symbol] = a
+    out = list(uniq.values())
+    return out if out else DEFAULT_UNIVERSE
+
+
+UNIVERSE = _load_universe_from_files()
 
 STATE_PATH = Path(__file__).resolve().parent / "state_log.json"
 SNAPSHOT_DIR = Path(__file__).resolve().parent / "snapshots"
