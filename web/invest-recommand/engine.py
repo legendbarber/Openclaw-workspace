@@ -287,6 +287,7 @@ def _consensus_from_naver_or_hk(symbol: str, name: str | None = None) -> Dict:
             "recommendationKey": None,
             "analystOpinions": 0,
             "opinionDistribution": {"buy": 0, "hold": 0, "sell": 0},
+            "reportLinks": [],
             "source": "hankyung_consensus",
             "confidence": 0.0,
             "score": 50.0,
@@ -309,6 +310,7 @@ def _consensus_from_naver_or_hk(symbol: str, name: str | None = None) -> Dict:
             "recommendationKey": None,
             "analystOpinions": 0,
             "opinionDistribution": {"buy": 0, "hold": 0, "sell": 0},
+            "reportLinks": [],
             "source": "hankyung_consensus",
             "confidence": 0.0,
             "score": 50.0,
@@ -341,6 +343,7 @@ def _consensus_from_naver_or_hk(symbol: str, name: str | None = None) -> Dict:
         recs: List[str] = []
         rec_ages: List[int] = []
         used_brokers = set()
+        hk_reports: List[Dict] = []
 
         rows = re.findall(r"<tr[^>]*>(.*?)</tr>", html, re.S)
         for tr in rows:
@@ -362,6 +365,8 @@ def _consensus_from_naver_or_hk(symbol: str, name: str | None = None) -> Dict:
             title = _txt(m_title.group(1)) if m_title else ""
             if stock_name not in title and code_match.group(1) not in title:
                 continue
+
+            m_idx = re.search(r'/analysis/downpdf\?report_idx=(\d+)', tr)
 
             tds = re.findall(r"<td[^>]*>(.*?)</td>", tr, re.S)
             cols = [_txt(td) for td in tds]
@@ -392,6 +397,15 @@ def _consensus_from_naver_or_hk(symbol: str, name: str | None = None) -> Dict:
             if rec_text:
                 recs.append(rec_text)
                 rec_ages.append(age_days)
+
+            if m_idx:
+                rid = m_idx.group(1)
+                hk_reports.append({
+                    "date": d.strftime("%Y-%m-%d"),
+                    "title": title,
+                    "broker": broker,
+                    "url": f"https://consensus.hankyung.com/analysis/downpdf?report_idx={rid}",
+                })
 
             if broker:
                 used_brokers.add(broker)
@@ -465,6 +479,7 @@ def _consensus_from_naver_or_hk(symbol: str, name: str | None = None) -> Dict:
             "analystOpinions": sample_n,
             "opinionDistribution": b,
             "freshnessBonus": round(float(recency_bonus), 2),
+            "reportLinks": hk_reports,
             "source": "hankyung_consensus",
             "confidence": round(float(np.clip((sample_n / 6) * 100, 0, 100)), 2),
             "score": round(float(np.clip(score, 0, 100)), 2),
@@ -477,6 +492,7 @@ def _consensus_from_naver_or_hk(symbol: str, name: str | None = None) -> Dict:
             "recommendationKey": None,
             "analystOpinions": 0,
             "opinionDistribution": {"buy": 0, "hold": 0, "sell": 0},
+            "reportLinks": [],
             "source": "hankyung_consensus",
             "confidence": 0.0,
             "score": 50.0,
@@ -521,6 +537,7 @@ def _consensus_from_yfinance(symbol: str) -> Dict:
             "recommendationKey": key,
             "analystOpinions": n,
             "opinionDistribution": b,
+            "reportLinks": [],
             "source": "yfinance",
             "confidence": round(float(np.clip(((float(n) if isinstance(n, (int, float)) else 0.0) / 20.0) * 100, 0, 100)), 2),
             "score": round(float(np.clip(score, 0, 100)), 2),
@@ -533,6 +550,7 @@ def _consensus_from_yfinance(symbol: str) -> Dict:
             "recommendationKey": None,
             "analystOpinions": None,
             "opinionDistribution": {"buy": 0, "hold": 0, "sell": 0},
+            "reportLinks": [],
             "source": "yfinance",
             "confidence": 0.0,
             "score": 50.0,
