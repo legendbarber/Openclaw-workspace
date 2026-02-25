@@ -426,6 +426,7 @@ async function loadData(){
     <div>카테고리: ${x.category} / 종합점수: <b>${fmt(x.score)}</b></div>
     <div><b>테마:</b> ${x.components?.theme?.theme || '-'} (테마점수 ${fmt(x.components?.theme?.themeScore)} / 리더 ${fmt(x.components?.theme?.leaderScore)} / 반영 ${fmt(x.components?.theme?.score)})</div>
     <div>현재가: ${fmt(x.currentPrice)} / <b>목표주가 컨센서스:</b> ${fmt(x.components?.reportConsensus?.targetMeanPrice)} (${fmtPct(x.components?.reportConsensus?.upsidePct)})</div>
+    <div><b>컨센서스 점수:</b> ${fmt(x.components?.reportConsensus?.score)} / <b>의견수:</b> ${fmt(x.components?.reportConsensus?.analystOpinions,0)} / <b>소스:</b> ${x.components?.reportConsensus?.source || '-'}</div>
     <div><b>상품 설명:</b> ${productDesc(x.symbol, x.name, x.category)}</div>
     <hr>
     <div><b>운용 계획</b></div>
@@ -459,6 +460,7 @@ async function loadData(){
       점수: ${fmt(r.score)} / 현재가: ${fmt(r.currentPrice)}<br>
       <b>테마:</b> ${r.components?.theme?.theme || '-'} (반영 ${fmt(r.components?.theme?.score)})<br>
       목표주가 컨센서스: ${fmt(r.components?.reportConsensus?.targetMeanPrice)} (${fmtPct(r.components?.reportConsensus?.upsidePct)})<br>
+      <b>컨센서스:</b> 점수 ${fmt(r.components?.reportConsensus?.score)} / 의견수 ${fmt(r.components?.reportConsensus?.analystOpinions,0)} / 소스 ${r.components?.reportConsensus?.source || '-'}<br>
       <b>설명:</b> ${productDesc(r.symbol, r.name, r.category)}<br>
       진입: ${fmt(r.plan.entryZone[0])}~${fmt(r.plan.entryZone[1])}<br>
       손절: ${fmt(r.plan.stopLoss)} / 익절1: ${fmt(r.plan.takeProfit1)}<br>

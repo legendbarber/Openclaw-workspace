@@ -190,6 +190,31 @@ def api_universe_update():
     return jsonify(data)
 
 
+@app.get('/api/symbol/<symbol>/detail')
+def api_symbol_detail(symbol: str):
+    sym = (symbol or '').upper().strip()
+    if not sym:
+        return jsonify({"error": "invalid_symbol"}), 400
+
+    # 최신 캐시부터 탐색해 해당 종목 상세 반환
+    items = sorted(_REPORT_CACHE.items(), key=lambda kv: kv[1].get('ts', 0), reverse=True)
+    for key, cached in items:
+        data = cached.get('data') or {}
+        rankings = data.get('rankings') or []
+        for r in rankings:
+            if str(r.get('symbol', '')).upper() == sym:
+                return jsonify({
+                    "ok": True,
+                    "cacheKey": key,
+                    "market": data.get('market'),
+                    "candidateLimit": data.get('candidateLimit'),
+                    "generatedAt": data.get('generatedAt'),
+                    "item": r,
+                })
+
+    return jsonify({"ok": False, "error": "not_found_in_cache", "symbol": sym}), 404
+
+
 @app.get('/api/snapshot/save')
 def api_snapshot_save():
     return jsonify(save_daily_snapshot(force=False))
