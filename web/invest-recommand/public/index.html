@@ -424,6 +424,7 @@ async function loadData(){
     <div class='big'>Top Pick: ${x.symbol} (${x.name})</div>
     <div>${detailLink(x.symbol)}</div>
     <div>카테고리: ${x.category} / 종합점수: <b>${fmt(x.score)}</b></div>
+    <div><b>테마:</b> ${x.components?.theme?.theme || '-'} (테마점수 ${fmt(x.components?.theme?.themeScore)} / 리더 ${fmt(x.components?.theme?.leaderScore)} / 반영 ${fmt(x.components?.theme?.score)})</div>
     <div>현재가: ${fmt(x.currentPrice)} / <b>목표주가 컨센서스:</b> ${fmt(x.components?.reportConsensus?.targetMeanPrice)} (${fmtPct(x.components?.reportConsensus?.upsidePct)})</div>
     <div><b>상품 설명:</b> ${productDesc(x.symbol, x.name, x.category)}</div>
     <hr>
@@ -456,6 +457,7 @@ async function loadData(){
     <div class='card'>
       <b>#${idx+1} ${r.symbol} (${r.name})</b> · ${detailLink(r.symbol)}<br>
       점수: ${fmt(r.score)} / 현재가: ${fmt(r.currentPrice)}<br>
+      <b>테마:</b> ${r.components?.theme?.theme || '-'} (반영 ${fmt(r.components?.theme?.score)})<br>
       목표주가 컨센서스: ${fmt(r.components?.reportConsensus?.targetMeanPrice)} (${fmtPct(r.components?.reportConsensus?.upsidePct)})<br>
       <b>설명:</b> ${productDesc(r.symbol, r.name, r.category)}<br>
       진입: ${fmt(r.plan.entryZone[0])}~${fmt(r.plan.entryZone[1])}<br>
@@ -489,7 +491,8 @@ async function loadData(){
     <div class='card'>
       <b>TH) 테마 강도</b><br>
       테마: ${c.theme?.theme || '-'}<br>
-      테마점수: ${fmt(c.theme?.themeScore)} / 리더점수: ${fmt(c.theme?.leaderScore)} / 반영점수: ${fmt(c.theme?.score)}
+      테마점수: ${fmt(c.theme?.themeScore)} / 리더점수: ${fmt(c.theme?.leaderScore)} / 반영점수: ${fmt(c.theme?.score)}<br>
+      밸류갭 보정(목표가-현재가): ${fmt(c.valuation?.adjustment)}점 (괴리 ${fmtPct(c.valuation?.upsidePct)})
     </div>
   `;
 }

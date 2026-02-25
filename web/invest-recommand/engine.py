@@ -646,6 +646,25 @@ def _apply_runtime_theme_scores(rows: List[Dict]) -> List[Dict]:
             conf = float(r.get("confidence", 50.0))
             final_score = 0.75 * base + 0.25 * th["score"]
             final_score = 0.9 * final_score + 0.1 * conf
+
+            # 밸류에이션 갭(목표가-현재가) 소폭 반영
+            up = (r.get("components", {}).get("reportConsensus", {}) or {}).get("upsidePct")
+            if isinstance(up, (int, float)):
+                # 과도한 왜곡 방지를 위해 캡 적용: -20%~+40%를 -4~+8점으로 반영
+                valuation_adj = float(np.clip(up, -20, 40)) * 0.2
+                final_score += valuation_adj
+                r.setdefault("components", {})["valuation"] = {
+                    "upsidePct": round(float(up), 2),
+                    "adjustment": round(float(valuation_adj), 2),
+                    "capRangePct": [-20, 40],
+                }
+            else:
+                r.setdefault("components", {})["valuation"] = {
+                    "upsidePct": None,
+                    "adjustment": 0.0,
+                    "capRangePct": [-20, 40],
+                }
+
             r["score"] = round(float(np.clip(final_score, 0, 100)), 2)
 
     return rows
@@ -979,7 +998,7 @@ def build_report(market: str = "all", candidate_limit: int | None = None, progre
         "model": f"{market_label} Single-Stock Dual Ranking v5 (No Momentum + Technical)",
         "market": mk,
         "candidateLimit": total_assets,
-        "methodology": "S=RuntimeThemeAdjusted: base(R/C/T)+runtime-theme scoring after full analysis (TH>R>C>T)",
+        "methodology": "S=RuntimeThemeAdjusted: base(R/C/T)+runtime-theme(TH)+small valuation-gap adjustment(upside capped)",
         "topPick": top,
         "rankings": rows,
         "riskAdjustedRankings": risk_adjusted,
