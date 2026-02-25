@@ -201,6 +201,7 @@ KST = ZoneInfo("Asia/Seoul")
 POSITIVE = ["beat", "strong", "upgrade", "rally", "surge", "record", "gain"]
 NEGATIVE = ["miss", "downgrade", "drop", "fall", "weak", "risk", "lawsuit"]
 _THEME_META_CACHE: Dict[str, Dict] = {}
+_HK_REPORT_CACHE: Dict[str, Dict] = {}
 
 
 def _download_close(symbol: str, period: str = "1y") -> pd.Series | None:
@@ -242,6 +243,105 @@ def _safe_fetch_text(url: str, encoding: str = "utf-8") -> str:
     req = urllib.request.Request(url, headers={"User-Agent": "Mozilla/5.0"})
     raw = urllib.request.urlopen(req, timeout=2.5).read()
     return raw.decode(encoding, "ignore")
+
+
+def _split_js_args(s: str) -> List[str]:
+    out: List[str] = []
+    cur: List[str] = []
+    q = None
+    esc = False
+    depth = 0
+    for ch in s:
+        if q:
+            cur.append(ch)
+            if esc:
+                esc = False
+            elif ch == "\\":
+                esc = True
+            elif ch == q:
+                q = None
+            continue
+        if ch in {'"', "'"}:
+            q = ch
+            cur.append(ch)
+            continue
+        if ch in "([{":
+            depth += 1
+            cur.append(ch)
+            continue
+        if ch in ")]}":
+            depth = max(0, depth - 1)
+            cur.append(ch)
+            continue
+        if ch == "," and depth == 0:
+            out.append("".join(cur).strip())
+            cur = []
+            continue
+        cur.append(ch)
+    if cur:
+        out.append("".join(cur).strip())
+    return out
+
+
+def _js_atom(v: str):
+    x = (v or "").strip()
+    if x == "null":
+        return None
+    if x == "true":
+        return True
+    if x == "false":
+        return False
+    if len(x) >= 2 and ((x[0] == '"' and x[-1] == '"') or (x[0] == "'" and x[-1] == "'")):
+        s = x[1:-1]
+        return s.replace("\\/", "/").replace('\\"', '"').replace("\\'", "'")
+    try:
+        if "." in x:
+            return float(x)
+        return int(x)
+    except Exception:
+        return x
+
+
+def _hankyung_view_fields(report_idx: str) -> Dict:
+    rid = str(report_idx or "").strip()
+    if not rid:
+        return {}
+    c = _HK_REPORT_CACHE.get(rid)
+    if c is not None:
+        return c
+
+    out: Dict = {}
+    try:
+        html = _safe_fetch_text(f"https://markets.hankyung.com/consensus/view/{rid}", encoding="utf-8")
+        m_decl = re.search(r"window\.__NUXT__=\(function\((.*?)\)\{return", html, re.S)
+        m_call = re.search(r"\}\((.*)\)\);</script>", html, re.S)
+        if not m_decl or not m_call:
+            _HK_REPORT_CACHE[rid] = out
+            return out
+
+        names = [x.strip() for x in m_decl.group(1).split(",")]
+        vals = _split_js_args(m_call.group(1))
+
+        for fld in ["TARGET_STOCK_PRICES", "GRADE_VALUE", "OLD_TARGET_STOCK_PRICES"]:
+            m_f = re.search(rf"{fld}:([a-zA-Z_][a-zA-Z0-9_]*|\"[^\"]*\"|'[^']*'|[0-9\.]+)", html)
+            if not m_f:
+                continue
+            tok = m_f.group(1)
+            if tok and tok[0] in {'"', "'"}:
+                out[fld] = _js_atom(tok)
+                continue
+            if re.match(r"^[0-9.]+$", tok):
+                out[fld] = _js_atom(tok)
+                continue
+            if tok in names:
+                i = names.index(tok)
+                if 0 <= i < len(vals):
+                    out[fld] = _js_atom(vals[i])
+    except Exception:
+        out = {}
+
+    _HK_REPORT_CACHE[rid] = out
+    return out
 
 
 def _recommendation_to_score(rec: str | None) -> float | None:
@@ -326,13 +426,13 @@ def _consensus_from_naver_or_hk(symbol: str, name: str | None = None) -> Dict:
                 "sdate": sdate,
                 "edate": edate,
                 "search_value": "REPORT_TITLE",
-                "search_text": stock_name,
+                "search_text": code_match.group(1),
                 "report_type": "CO",
                 "pagenum": "80",
                 "now_page": "1",
             })
         )
-        html = _safe_fetch_text(url, encoding="utf-8")
+        html = _safe_fetch_text(url, encoding="euc-kr")
 
         def _txt(x: str) -> str:
             x = re.sub(r"<[^>]+>", " ", x)
@@ -370,14 +470,27 @@ def _consensus_from_naver_or_hk(symbol: str, name: str | None = None) -> Dict:
 
             tds = re.findall(r"<td[^>]*>(.*?)</td>", tr, re.S)
             cols = [_txt(td) for td in tds]
-            broker = cols[4] if len(cols) >= 5 else None
+            broker = cols[5] if len(cols) >= 6 else (cols[4] if len(cols) >= 5 else None)
             if broker and broker in used_brokers:
                 continue
 
             detail_text = _txt(tr)
 
-            # 목표가 텍스트 추출 (가능한 경우만)
-            m_tp = (
+            # 목록 표의 목표주가 컬럼 우선 사용 (예: 1,550,000)
+            row_target = None
+            if len(cols) >= 3:
+                m_col_tp = re.search(r"([0-9][0-9,]{3,})", cols[2] or "")
+                if m_col_tp:
+                    try:
+                        row_target = float(m_col_tp.group(1).replace(",", ""))
+                    except Exception:
+                        row_target = None
+            if isinstance(row_target, (int, float)) and row_target > 0:
+                targets.append(float(row_target))
+                target_ages.append(age_days)
+
+            # 컬럼이 비어 있으면 텍스트에서 목표가 추출
+            m_tp = None if row_target else (
                 re.search(r"목표\s*주가\s*[:：]?\s*([0-9][0-9,]{3,})\s*원", detail_text, re.I)
                 or re.search(r"적정\s*주가\s*[:：]?\s*([0-9][0-9,]{3,})\s*원", detail_text, re.I)
                 or re.search(r"\bTP\s*[:=]?\s*([0-9][0-9,]{3,})\b", detail_text, re.I)
@@ -394,6 +507,22 @@ def _consensus_from_naver_or_hk(symbol: str, name: str | None = None) -> Dict:
                 if re.search(re.escape(kw), detail_text, re.I):
                     rec_text = kw
                     break
+
+            # 목록에 값이 없으면 markets view 페이지에서 TARGET_STOCK_PRICES/GRADE_VALUE 보강
+            if m_idx and (not m_tp or not rec_text):
+                extra = _hankyung_view_fields(m_idx.group(1))
+                x_tp = extra.get("TARGET_STOCK_PRICES")
+                if (not m_tp) and isinstance(x_tp, (int, float, str)):
+                    try:
+                        tpv = float(str(x_tp).replace(",", ""))
+                        if tpv > 0:
+                            targets.append(tpv)
+                            target_ages.append(age_days)
+                    except Exception:
+                        pass
+                x_grade = str(extra.get("GRADE_VALUE") or "").strip()
+                if (not rec_text) and x_grade:
+                    rec_text = x_grade
             if rec_text:
                 recs.append(rec_text)
                 rec_ages.append(age_days)
@@ -424,16 +553,19 @@ def _consensus_from_naver_or_hk(symbol: str, name: str | None = None) -> Dict:
 
         target = None
         recency_bonus = 0.0
-        if targets:
-            w = np.array([np.exp(-float(a) / 21.0) for a in target_ages], dtype=float)
-            t = np.array(targets, dtype=float)
+        if targets and target_ages:
+            n_pair = min(len(targets), len(target_ages))
+            t = np.array(targets[:n_pair], dtype=float)
+            ages = np.array(target_ages[:n_pair], dtype=float)
+            w = np.array([np.exp(-float(a) / 21.0) for a in ages], dtype=float)
             if len(t) >= 5:
                 idx = np.argsort(t)
                 keep = idx[1:-1]
                 t = t[keep]
                 w = w[keep]
-            target = float(np.average(t, weights=w)) if w.sum() > 0 else float(np.mean(t))
-            avg_age = float(np.average(np.array(target_ages, dtype=float), weights=w)) if w.sum() > 0 else float(np.mean(target_ages))
+                ages = ages[keep]
+            target = float(np.average(t, weights=w)) if (len(w) == len(t) and w.sum() > 0) else float(np.mean(t))
+            avg_age = float(np.average(ages, weights=w)) if (len(w) == len(ages) and w.sum() > 0) else float(np.mean(ages))
             recency_bonus = float(np.clip((31 - avg_age) / 31 * 8, 0, 8))
 
         # 한경 목록에서 목표가 추출이 안 되는 종목은 yfinance 목표가를 보조값으로 사용
@@ -899,6 +1031,11 @@ def evaluate_asset(asset: Asset) -> Dict | None:
         return None
 
     report_consensus = _consensus(asset.symbol, asset.name)
+
+    # 사용자 요청: 목표주가 컨센서스가 없는 종목은 추천 제외
+    if report_consensus.get("targetMeanPrice") is None:
+        return None
+
     momentum = _momentum_score(s)
     crowd = _news(asset.symbol, asset.name)
     liquidity = _liquidity_score(asset.symbol)
