@@ -134,20 +134,37 @@ def _consensus_from_naver_or_hk(symbol: str) -> Dict:
     try:
         html = _safe_fetch_text(list_url, encoding="euc-kr")
         nids = re.findall(r"company_read\.naver\?nid=(\d+)&page=1&searchType=itemCode&itemCode=" + re.escape(code), html)
-        nids = list(dict.fromkeys(nids))[:1]
+        nids = list(dict.fromkeys(nids))[:12]
 
         targets = []
         recs = []
+        used_brokers = set()
         for nid in nids:
             try:
                 read_url = f"https://finance.naver.com/research/company_read.naver?nid={nid}&page=1&searchType=itemCode&itemCode={code}"
                 body = _safe_fetch_text(read_url, encoding="euc-kr")
+
+                # 동일 증권사 중복 방지 (가장 최신 리포트 1개만 사용)
+                m_broker = re.search(r'<p class="source">\s*([^<|]+?)\s*<b class="bar">\|</b>', body)
+                broker = m_broker.group(1).strip() if m_broker else None
+                if broker and broker in used_brokers:
+                    continue
+
                 m_price = re.search(r'class="money"><strong>([\d,]+)</strong>', body)
-                if m_price:
-                    targets.append(float(m_price.group(1).replace(",", "")))
+                if not m_price:
+                    continue
+                price_val = float(m_price.group(1).replace(",", ""))
+                targets.append(price_val)
+
+                if broker:
+                    used_brokers.add(broker)
+
                 m_rec = re.search(r'class="coment">([^<]+)</em>', body)
                 if m_rec:
                     recs.append(m_rec.group(1).strip())
+
+                if len(targets) >= 6:
+                    break
             except Exception:
                 continue
 
@@ -160,7 +177,14 @@ def _consensus_from_naver_or_hk(symbol: str) -> Dict:
         except Exception:
             cur = None
 
-        target = float(np.mean(targets)) if targets else None
+        target = None
+        if targets:
+            arr = sorted(targets)
+            if len(arr) >= 5:
+                # 이상치 완화: 상하위 1개 제거한 절사평균
+                arr = arr[1:-1]
+            target = float(np.mean(arr))
+
         up = ((target / cur - 1) * 100) if (target and cur) else None
 
         rec_scores = [x for x in (_recommendation_to_score(r) for r in recs) if isinstance(x, (int, float))]

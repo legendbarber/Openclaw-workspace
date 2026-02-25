@@ -312,7 +312,7 @@ async function loadData(){
     <div class='big'>Top Pick: ${x.symbol} (${x.name})</div>
     <div>${detailLink(x.symbol)}</div>
     <div>카테고리: ${x.category} / 종합점수: <b>${fmt(x.score)}</b></div>
-    <div>현재가: ${fmt(x.currentPrice)}</div>
+    <div>현재가: ${fmt(x.currentPrice)} / <b>목표주가 컨센서스:</b> ${fmt(x.components?.reportConsensus?.targetMeanPrice)} (${fmtPct(x.components?.reportConsensus?.upsidePct)})</div>
     <div><b>상품 설명:</b> ${productDesc(x.symbol, x.name, x.category)}</div>
     <hr>
     <div><b>운용 계획</b></div>
@@ -346,6 +346,7 @@ async function loadData(){
     <div class='card'>
       <b>#${idx+1} ${r.symbol} (${r.name})</b> · ${detailLink(r.symbol)}<br>
       점수: ${fmt(r.score)} / 현재가: ${fmt(r.currentPrice)}<br>
+      목표주가 컨센서스: ${fmt(r.components?.reportConsensus?.targetMeanPrice)} (${fmtPct(r.components?.reportConsensus?.upsidePct)})<br>
       <b>설명:</b> ${productDesc(r.symbol, r.name, r.category)}<br>
       진입: ${fmt(r.plan.entryZone[0])}~${fmt(r.plan.entryZone[1])}<br>
       손절: ${fmt(r.plan.stopLoss)} / 익절1: ${fmt(r.plan.takeProfit1)}<br>
@@ -366,6 +367,7 @@ async function loadData(){
     <div class='card'>
       <b>#${idx+1} ${r.symbol} (${r.name})</b> · ${detailLink(r.symbol)}<br>
       점수: ${fmt(r.score)} / 현재가: ${fmt(r.currentPrice)}<br>
+      목표주가 컨센서스: ${fmt(r.components?.reportConsensus?.targetMeanPrice)} (${fmtPct(r.components?.reportConsensus?.upsidePct)})<br>
       <b>설명:</b> ${productDesc(r.symbol, r.name, r.category)}<br>
       진입: ${fmt(r.plan.entryZone[0])}~${fmt(r.plan.entryZone[1])}<br>
       손절: ${fmt(r.plan.stopLoss)} / 익절1: ${fmt(r.plan.takeProfit1)}<br>
@@ -390,8 +392,9 @@ async function loadData(){
     <div class='card'>
       <b>R) 리포트/기관 합의</b><br>
       점수: ${fmt(c.reportConsensus.score)}<br>
+      목표주가 컨센서스: ${fmt(c.reportConsensus.targetMeanPrice)}<br>
       목표가 괴리: ${fmt(c.reportConsensus.upsidePct)}%<br>
-      추천지수: ${fmt(c.reportConsensus.recommendationMean)} / 의견수: ${fmt(c.reportConsensus.analystOpinions,0)}
+      추천지수: ${fmt(c.reportConsensus.recommendationMean)} / 의견수: ${fmt(c.reportConsensus.analystOpinions,0)} / 소스: ${c.reportConsensus.source || '-'}
     </div>
     <div class='card'>
       <b>T) 기술적 분석(차트/가격)</b><br>
