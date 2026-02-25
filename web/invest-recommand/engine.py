@@ -447,10 +447,11 @@ def evaluate_asset(asset: Asset) -> Dict | None:
     risk = _risk_score(s)
     technical = _technical_score(s, target_price=report_consensus.get("targetMeanPrice"))
 
-    # 사용자 요청 반영: reportConsensus + technical만 사용 (7:3)
+    # 사용자 요청 반영: 리서치/뉴스/기술적분석 = 6:2:2
     score = (
-        0.70 * report_consensus["score"] +
-        0.30 * technical["score"]
+        0.60 * report_consensus["score"] +
+        0.20 * crowd["score"] +
+        0.20 * technical["score"]
     )
 
     cur = float(s.iloc[-1])
@@ -575,7 +576,7 @@ def build_report(market: str = "all") -> Dict:
         "generatedAt": datetime.now(UTC).isoformat().replace("+00:00", "Z"),
         "model": f"{market_label} Single-Stock Dual Ranking v5 (No Momentum + Technical)",
         "market": mk,
-        "methodology": "S=0.70R+0.30T (R: ReportConsensus / T: Technical)",
+        "methodology": "S=0.60R+0.20C+0.20T (R: ReportConsensus / C: CrowdNews / T: Technical)",
         "topPick": top,
         "rankings": rows,
         "riskAdjustedRankings": risk_adjusted,

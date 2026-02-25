@@ -134,7 +134,7 @@ function recommendationWhy(r, mode='risk'){
   reasons.push(`기술분석 ${fmt(tech.score)}점 (RSI ${fmt(tech.rsi14)} / MA20 이격 ${fmtPct(tech.distMa20Pct)} / 20일고점대비 ${fmtPct(tech.from20dHighPct)} / 셋업 ${tech.setup||'-'})`);
   reasons.push(`유동성 ${fmt(liq)}점 · 리스크 ${fmt(risk.score)}점 (변동성 ${fmtPct(risk.volPct)} / MDD ${fmtPct(risk.maxDrawdownPct)})`);
   reasons.push(`(참고) 모멘텀 ${fmt(m.score)}점 (1M ${fmtPct(m.m1Pct)} / 3M ${fmtPct(m.m3Pct)} / 6M ${fmtPct(m.m6Pct)})`);
-  reasons.push(`종합점수 ${fmt(r.score)} = 0.70R + 0.30T`);
+  reasons.push(`종합점수 ${fmt(r.score)} = 0.60R + 0.20C + 0.20T`);
 
   return reasons.join('<br>');
 }
