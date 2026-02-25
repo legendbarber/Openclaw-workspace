@@ -79,6 +79,122 @@ def _load_universe_from_files() -> List[Asset]:
 
 UNIVERSE = _load_universe_from_files()
 
+
+def reload_universe() -> Dict:
+    global UNIVERSE
+    UNIVERSE = _load_universe_from_files()
+    us_n = sum(1 for a in UNIVERSE if a.category == "us-stock")
+    kr_n = sum(1 for a in UNIVERSE if a.category == "kr-stock")
+    return {"total": len(UNIVERSE), "us": us_n, "kr": kr_n}
+
+
+def _fetch_text(url: str, encoding: str = "utf-8") -> str:
+    req = urllib.request.Request(url, headers={"User-Agent": "Mozilla/5.0"})
+    return urllib.request.urlopen(req, timeout=20).read().decode(encoding, "ignore")
+
+
+def _refresh_us_top300(base_dir: Path) -> int:
+    rows = []
+    for page in range(1, 5):
+        html = _fetch_text(f"https://companiesmarketcap.com/usa/largest-companies-in-the-usa-by-market-cap/?page={page}", "utf-8")
+        for m in re.finditer(r'<tr>.*?<div class="company-name">(.*?)</div>.*?<div class="company-code">.*?([A-Z\.\-]{1,12})</div>.*?<td class="td-right" data-sort="([0-9]+)"><span class="currency-symbol-left">\$</span>.*?</td>', html, re.S):
+            name = re.sub(r"\s+", " ", m.group(1)).strip()
+            symbol = m.group(2).strip().upper()
+            mcap = int(m.group(3))
+            rows.append((symbol, name, mcap))
+
+    best = {}
+    for s, n, c in rows:
+        if s not in best or c > best[s][1]:
+            best[s] = (n, c)
+
+    arr = sorted([(s, v[0], v[1]) for s, v in best.items()], key=lambda x: x[2], reverse=True)[:300]
+    out = [{"symbol": s, "name": n, "category": "us-stock", "marketCap": c} for s, n, c in arr]
+    (base_dir / "universe_us_top300.json").write_text(json.dumps(out, ensure_ascii=False, indent=2), encoding="utf-8")
+    return len(out)
+
+
+def _strip_tags(x: str) -> str:
+    x = re.sub(r"<[^>]+>", "", x)
+    return x.replace("&nbsp;", " ").replace(",", "").strip()
+
+
+def _refresh_kr_top300(base_dir: Path) -> int:
+    rows = []
+    for page in range(1, 9):
+        html = _fetch_text(f"https://finance.naver.com/sise/sise_market_sum.naver?sosok=0&page={page}", "euc-kr")
+        for tr in re.findall(r"<tr[^>]*>.*?</tr>", html, re.S):
+            if "item/main.naver?code=" not in tr:
+                continue
+            code_m = re.search(r"item/main\.naver\?code=(\d{6})", tr)
+            name_m = re.search(r'class="tltle">(.*?)</a>', tr, re.S)
+            if not code_m or not name_m:
+                continue
+            code = code_m.group(1)
+            name = _strip_tags(name_m.group(1))
+            tds = re.findall(r"<td[^>]*>(.*?)</td>", tr, re.S)
+            cols = [_strip_tags(td) for td in tds]
+            if len(cols) < 7:
+                continue
+            try:
+                mcap_eok = float(cols[6])
+            except Exception:
+                continue
+            rows.append((code + ".KS", name, int(mcap_eok * 100000000)))
+
+    if len(rows) < 300:
+        for page in range(1, 13):
+            html = _fetch_text(f"https://finance.naver.com/sise/sise_market_sum.naver?sosok=1&page={page}", "euc-kr")
+            for tr in re.findall(r"<tr[^>]*>.*?</tr>", html, re.S):
+                if "item/main.naver?code=" not in tr:
+                    continue
+                code_m = re.search(r"item/main\.naver\?code=(\d{6})", tr)
+                name_m = re.search(r'class="tltle">(.*?)</a>', tr, re.S)
+                if not code_m or not name_m:
+                    continue
+                code = code_m.group(1)
+                name = _strip_tags(name_m.group(1))
+                tds = re.findall(r"<td[^>]*>(.*?)</td>", tr, re.S)
+                cols = [_strip_tags(td) for td in tds]
+                if len(cols) < 7:
+                    continue
+                try:
+                    mcap_eok = float(cols[6])
+                except Exception:
+                    continue
+                rows.append((code + ".KQ", name, int(mcap_eok * 100000000)))
+
+    best = {}
+    for s, n, c in rows:
+        if s not in best or c > best[s][1]:
+            best[s] = (n, c)
+
+    arr = sorted([(s, v[0], v[1]) for s, v in best.items()], key=lambda x: x[2], reverse=True)[:300]
+    out = [{"symbol": s, "name": n, "category": "kr-stock", "marketCap": c} for s, n, c in arr]
+    (base_dir / "universe_kr_top300.json").write_text(json.dumps(out, ensure_ascii=False, indent=2), encoding="utf-8")
+    return len(out)
+
+
+def refresh_universe_top300() -> Dict:
+    base = Path(__file__).resolve().parent
+    us_n = _refresh_us_top300(base)
+    kr_n = _refresh_kr_top300(base)
+    loaded = reload_universe()
+    return {"ok": True, "us": us_n, "kr": kr_n, "loaded": loaded, "updatedAt": datetime.now(UTC).isoformat().replace("+00:00", "Z")}
+
+
+def get_universe_stats() -> Dict:
+    base = Path(__file__).resolve().parent
+    us_path = base / "universe_us_top300.json"
+    kr_path = base / "universe_kr_top300.json"
+    return {
+        "loaded": reload_universe(),
+        "files": {
+            "us": {"path": str(us_path), "exists": us_path.exists(), "updatedAt": datetime.fromtimestamp(us_path.stat().st_mtime, UTC).isoformat().replace("+00:00", "Z") if us_path.exists() else None},
+            "kr": {"path": str(kr_path), "exists": kr_path.exists(), "updatedAt": datetime.fromtimestamp(kr_path.stat().st_mtime, UTC).isoformat().replace("+00:00", "Z") if kr_path.exists() else None},
+        },
+    }
+
 STATE_PATH = Path(__file__).resolve().parent / "state_log.json"
 SNAPSHOT_DIR = Path(__file__).resolve().parent / "snapshots"
 KST = ZoneInfo("Asia/Seoul")
@@ -786,7 +902,7 @@ def _is_etf_like(row: Dict) -> bool:
     return symbol in {"SPY", "QQQ", "EEM", "EFA", "VNQ", "TLT", "IEF", "LQD", "GLD", "SLV", "USO", "DBC"}
 
 
-def build_report(market: str = "all", progress_cb=None) -> Dict:
+def build_report(market: str = "all", candidate_limit: int | None = None, progress_cb=None) -> Dict:
     rows = []
     failed = []
 
@@ -796,6 +912,9 @@ def build_report(market: str = "all", progress_cb=None) -> Dict:
         assets = [a for a in UNIVERSE if a.category.startswith("us-")]
     elif mk == "kr":
         assets = [a for a in UNIVERSE if a.category.startswith("kr-")]
+
+    if isinstance(candidate_limit, int) and candidate_limit > 0:
+        assets = assets[:candidate_limit]
 
     total_assets = len(assets)
     for i, a in enumerate(assets, start=1):
@@ -859,6 +978,7 @@ def build_report(market: str = "all", progress_cb=None) -> Dict:
         "generatedAt": datetime.now(UTC).isoformat().replace("+00:00", "Z"),
         "model": f"{market_label} Single-Stock Dual Ranking v5 (No Momentum + Technical)",
         "market": mk,
+        "candidateLimit": total_assets,
         "methodology": "S=RuntimeThemeAdjusted: base(R/C/T)+runtime-theme scoring after full analysis (TH>R>C>T)",
         "topPick": top,
         "rankings": rows,

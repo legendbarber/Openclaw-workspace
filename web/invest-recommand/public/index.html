@@ -32,9 +32,17 @@
         <h1 id="pageTitle" style="margin:0">Invest Recommand · Trading Desk</h1>
         <div id="pageSubtitle" class="muted">Desk View: Top pick, execution plan, rankings, indicators</div>
       </div>
-      <div style="display:flex;gap:8px;align-items:center">
+      <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;justify-content:flex-end">
         <span id="marketBadge" class="badge">LIVE SCANNER</span>
+        <label class="tiny" for="limitSelect">후보범위</label>
+        <select id="limitSelect" onchange="saveLimitPref()" style="background:#374151;color:#fff;border:1px solid #4b5563;border-radius:8px;padding:7px 8px">
+          <option value="50">50</option>
+          <option value="100">100</option>
+          <option value="200">200</option>
+          <option value="300" selected>300</option>
+        </select>
         <button onclick="refreshData()">새로 조회</button>
+        <button onclick="updateUniverse()">시가총액 업데이트</button>
       </div>
     </div>
 
@@ -72,6 +80,23 @@ function setMarketHeader(){
   document.getElementById('pageTitle').textContent = `Invest Recommand · Trading Desk (${marketText(m)})`;
   document.getElementById('pageSubtitle').textContent = m==='us' ? '미국주식 추천 전용 뷰' : (m==='kr' ? '한국주식 추천 전용 뷰' : 'KR+US 통합 추천 뷰');
 }
+
+function getLimit(){
+  const v = Number(document.getElementById('limitSelect')?.value || 300);
+  return [50,100,200,300].includes(v) ? v : 300;
+}
+function saveLimitPref(){
+  const m = getMarket();
+  const v = getLimit();
+  localStorage.setItem(`invest_limit_${m}`, String(v));
+}
+function loadLimitPref(){
+  const m = getMarket();
+  const saved = Number(localStorage.getItem(`invest_limit_${m}`) || 300);
+  const v = [50,100,200,300].includes(saved) ? saved : 300;
+  const sel = document.getElementById('limitSelect');
+  if(sel) sel.value = String(v);
+}
 function setLoading(on){
   const el=document.getElementById('topLoader');
   if(!el) return;
@@ -103,9 +128,9 @@ function hideProgress(){
   el.innerHTML = '';
 }
 
-async function waitReportReady(market){
+async function waitReportReady(market, limit){
   while(true){
-    const p = await apiGet(`/api/report/progress?market=${market}&t=${Date.now()}`);
+    const p = await apiGet(`/api/report/progress?market=${market}&limit=${limit}&t=${Date.now()}`);
     if(p.status==='done'){
       hideProgress();
       return;
@@ -308,13 +333,32 @@ async function renderMiniChart(symbol, elId){
   }
 }
 
+async function updateUniverse(){
+  try{
+    showProgress('⏳ 시가총액 상위 300 파일 업데이트 중...');
+    const res = await fetch(`/api/universe/update?t=${Date.now()}`, { method:'POST' });
+    const d = await res.json();
+    if(!res.ok || !d.ok){
+      showProgress(`❌ 업데이트 실패: ${d?.message || res.status}`);
+      return;
+    }
+    showProgress(`✅ 업데이트 완료 (US ${d.us} / KR ${d.kr})`);
+    await new Promise(r=>setTimeout(r,1000));
+    hideProgress();
+  }catch(e){
+    showProgress(`❌ 업데이트 실패: ${e.message}`);
+  }
+}
+
 async function refreshData(){
   const market = getMarket();
-  const r = await apiGet(`/api/report/refresh?market=${market}&t=${Date.now()}`);
+  const limit = getLimit();
+  saveLimitPref();
+  const r = await apiGet(`/api/report/refresh?market=${market}&limit=${limit}&t=${Date.now()}`);
   if(r.status==='running' || r.__status===202){
     const pr = r.progress || {};
     showProgress(`⏳ 분석 시작... ${pr.done ?? 0}/${pr.total ?? 0} (${pr.progressPct ?? 0}%)`);
-    await waitReportReady(market);
+    await waitReportReady(market, limit);
     await loadData();
     return;
   }
@@ -323,9 +367,10 @@ async function refreshData(){
 
 async function loadData(){
   const market = getMarket();
+  const limit = getLimit();
   let d;
   try{
-    d = await apiGet(`/api/report?market=${market}&t=${Date.now()}`);
+    d = await apiGet(`/api/report?market=${market}&limit=${limit}&t=${Date.now()}`);
   }catch(e){
     showProgress('아직 저장된 분석 결과가 없어요. "새로 조회"를 눌러 분석을 시작하세요.');
     return;
@@ -334,13 +379,14 @@ async function loadData(){
   if(d.status==='running' || d.__status===202){
     const pr = d.progress || {};
     showProgress(`⏳ 분석 중... ${pr.done ?? 0}/${pr.total ?? 0} (${pr.progressPct ?? 0}%)`);
-    await waitReportReady(market);
-    d = await apiGet(`/api/report?market=${market}&t=${Date.now()}`);
+    await waitReportReady(market, limit);
+    d = await apiGet(`/api/report?market=${market}&limit=${limit}&t=${Date.now()}`);
   }
 
   document.getElementById('meta').innerHTML = `
     <b>생성시각:</b> ${new Date(d.generatedAt).toLocaleString()}<br>
     <b>모델:</b> ${d.model}<br>
+    <b>후보범위:</b> 상위 ${d.candidateLimit || limit} 종목<br>
     <b>점수식:</b> ${d.methodology}
   `;
 
@@ -449,6 +495,7 @@ async function loadData(){
 }
 
 setMarketHeader();
+loadLimitPref();
 loadData();
 </script>
 </body>

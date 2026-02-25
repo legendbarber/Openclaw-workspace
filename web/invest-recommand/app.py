@@ -6,6 +6,8 @@ from engine import (
     get_snapshot,
     list_snapshot_dates_by_month,
     get_current_change_vs_snapshot,
+    refresh_universe_top300,
+    get_universe_stats,
 )
 from theme_leader import (
     build_theme_leader_report,
@@ -37,6 +39,18 @@ _CHART_CACHE = {}
 _CHART_TTL_SEC = 300
 
 
+def _normalize_candidate_limit(v) -> int:
+    try:
+        n = int(v)
+    except Exception:
+        n = 300
+    return n if n in {50, 100, 200, 300} else 300
+
+
+def _report_key(market: str, candidate_limit: int) -> str:
+    return f"{market}:{candidate_limit}"
+
+
 def _snapshot_worker():
     """매일 KST 20:00~20:04 사이 1회 스냅샷 저장."""
     last_saved_day = None
@@ -55,10 +69,10 @@ def _snapshot_worker():
 threading.Thread(target=_snapshot_worker, daemon=True).start()
 
 
-def _run_report_job(market: str, task_id: str):
+def _run_report_job(key: str, market: str, candidate_limit: int, task_id: str):
     def _progress_cb(done: int, total: int, symbol: str):
         with _REPORT_LOCK:
-            st = _REPORT_PROGRESS.get(market, {})
+            st = _REPORT_PROGRESS.get(key, {})
             if st.get("taskId") != task_id:
                 return
             st.update({
@@ -69,13 +83,13 @@ def _run_report_job(market: str, task_id: str):
                 "progressPct": round((done / total) * 100, 2) if total else 0.0,
                 "updatedAt": datetime.now(KST).isoformat(),
             })
-            _REPORT_PROGRESS[market] = st
+            _REPORT_PROGRESS[key] = st
 
     try:
-        data = build_report(market=market, progress_cb=_progress_cb)
+        data = build_report(market=market, candidate_limit=candidate_limit, progress_cb=_progress_cb)
         with _REPORT_LOCK:
-            _REPORT_CACHE[market] = {"ts": time.time(), "data": data}
-            st = _REPORT_PROGRESS.get(market, {})
+            _REPORT_CACHE[key] = {"ts": time.time(), "data": data}
+            st = _REPORT_PROGRESS.get(key, {})
             st.update({
                 "status": "done",
                 "done": st.get("total", 0),
@@ -83,16 +97,16 @@ def _run_report_job(market: str, task_id: str):
                 "updatedAt": datetime.now(KST).isoformat(),
                 "error": None,
             })
-            _REPORT_PROGRESS[market] = st
+            _REPORT_PROGRESS[key] = st
     except Exception as e:
         with _REPORT_LOCK:
-            st = _REPORT_PROGRESS.get(market, {})
+            st = _REPORT_PROGRESS.get(key, {})
             st.update({
                 "status": "error",
                 "error": str(e),
                 "updatedAt": datetime.now(KST).isoformat(),
             })
-            _REPORT_PROGRESS[market] = st
+            _REPORT_PROGRESS[key] = st
 
 
 @app.get('/api/report')
@@ -100,16 +114,18 @@ def api_report():
     market = (request.args.get('market', default='all', type=str) or 'all').lower()
     if market not in {'all', 'kr', 'us'}:
         market = 'all'
+    candidate_limit = _normalize_candidate_limit(request.args.get('limit', default=300, type=int))
+    key = _report_key(market, candidate_limit)
 
-    cached = _REPORT_CACHE.get(market)
+    cached = _REPORT_CACHE.get(key)
     if cached and cached.get('data') is not None:
         return jsonify(cached['data'])
 
-    st = _REPORT_PROGRESS.get(market)
+    st = _REPORT_PROGRESS.get(key)
     if st and st.get("status") == "running":
-        return jsonify({"status": "running", "market": market, "progress": st}), 202
+        return jsonify({"status": "running", "market": market, "limit": candidate_limit, "progress": st}), 202
 
-    return jsonify({"status": "idle", "market": market, "message": "no_cached_report"}), 404
+    return jsonify({"status": "idle", "market": market, "limit": candidate_limit, "message": "no_cached_report"}), 404
 
 
 @app.get('/api/report/refresh')
@@ -117,14 +133,16 @@ def api_report_refresh():
     market = (request.args.get('market', default='all', type=str) or 'all').lower()
     if market not in {'all', 'kr', 'us'}:
         market = 'all'
+    candidate_limit = _normalize_candidate_limit(request.args.get('limit', default=300, type=int))
+    key = _report_key(market, candidate_limit)
 
     with _REPORT_LOCK:
-        st = _REPORT_PROGRESS.get(market)
+        st = _REPORT_PROGRESS.get(key)
         if st and st.get("status") == "running":
-            return jsonify({"status": "running", "market": market, "progress": st}), 202
+            return jsonify({"status": "running", "market": market, "limit": candidate_limit, "progress": st}), 202
 
         task_id = str(uuid.uuid4())
-        _REPORT_PROGRESS[market] = {
+        _REPORT_PROGRESS[key] = {
             "taskId": task_id,
             "status": "running",
             "done": 0,
@@ -135,9 +153,9 @@ def api_report_refresh():
             "updatedAt": datetime.now(KST).isoformat(),
             "error": None,
         }
-        threading.Thread(target=_run_report_job, args=(market, task_id), daemon=True).start()
+        threading.Thread(target=_run_report_job, args=(key, market, candidate_limit, task_id), daemon=True).start()
 
-    return jsonify({"status": "running", "market": market, "progress": _REPORT_PROGRESS.get(market)}), 202
+    return jsonify({"status": "running", "market": market, "limit": candidate_limit, "progress": _REPORT_PROGRESS.get(key)}), 202
 
 
 @app.get('/api/report/progress')
@@ -145,11 +163,31 @@ def api_report_progress():
     market = (request.args.get('market', default='all', type=str) or 'all').lower()
     if market not in {'all', 'kr', 'us'}:
         market = 'all'
+    candidate_limit = _normalize_candidate_limit(request.args.get('limit', default=300, type=int))
+    key = _report_key(market, candidate_limit)
 
-    st = _REPORT_PROGRESS.get(market)
+    st = _REPORT_PROGRESS.get(key)
     if not st:
-        return jsonify({"status": "idle", "market": market})
-    return jsonify({"status": st.get("status", "idle"), "market": market, "progress": st})
+        return jsonify({"status": "idle", "market": market, "limit": candidate_limit})
+    return jsonify({"status": st.get("status", "idle"), "market": market, "limit": candidate_limit, "progress": st})
+
+
+@app.get('/api/universe/stats')
+def api_universe_stats():
+    return jsonify(get_universe_stats())
+
+
+@app.post('/api/universe/update')
+def api_universe_update():
+    # 시가총액 상위 300 파일 재생성 + 메모리 유니버스 재로드
+    data = refresh_universe_top300()
+
+    # 기존 캐시 무효화
+    with _REPORT_LOCK:
+        _REPORT_CACHE.clear()
+        _REPORT_PROGRESS.clear()
+
+    return jsonify(data)
 
 
 @app.get('/api/snapshot/save')
