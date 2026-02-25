@@ -169,6 +169,7 @@ def _consensus_from_naver_or_hk(symbol: str) -> Dict:
             "analystOpinions": 0,
             "opinionDistribution": {"buy": 0, "hold": 0, "sell": 0},
             "source": "naver_research",
+            "confidence": 0.0,
             "score": 50.0,
         }
 
@@ -181,7 +182,9 @@ def _consensus_from_naver_or_hk(symbol: str) -> Dict:
         nids = list(dict.fromkeys(nids))[:12]
 
         targets = []
+        target_ages = []
         recs = []
+        rec_ages = []
         used_brokers = set()
         cutoff = datetime.now(KST).date() - timedelta(days=31)
 
@@ -192,13 +195,15 @@ def _consensus_from_naver_or_hk(symbol: str) -> Dict:
 
                 # 리포트 날짜 필터: 최근 1개월 이내만 반영
                 m_date = re.search(r'<p class="source">[\s\S]*?<b class="bar">\|</b>\s*(\d{4}\.\d{2}\.\d{2})\s*<b class="bar">\|</b>', body)
-                if m_date:
-                    try:
-                        d = datetime.strptime(m_date.group(1), "%Y.%m.%d").date()
-                        if d < cutoff:
-                            continue
-                    except Exception:
+                if not m_date:
+                    continue
+                try:
+                    d = datetime.strptime(m_date.group(1), "%Y.%m.%d").date()
+                    if d < cutoff:
                         continue
+                    age_days = max(0, (datetime.now(KST).date() - d).days)
+                except Exception:
+                    continue
 
                 # 동일 증권사 중복 방지 (가장 최신 리포트 1개만 사용)
                 m_broker = re.search(r'<p class="source">\s*([^<|]+?)\s*<b class="bar">\|</b>', body)
@@ -211,6 +216,7 @@ def _consensus_from_naver_or_hk(symbol: str) -> Dict:
                     continue
                 price_val = float(m_price.group(1).replace(",", ""))
                 targets.append(price_val)
+                target_ages.append(age_days)
 
                 if broker:
                     used_brokers.add(broker)
@@ -218,6 +224,7 @@ def _consensus_from_naver_or_hk(symbol: str) -> Dict:
                 m_rec = re.search(r'class="coment">([^<]+)</em>', body)
                 if m_rec:
                     recs.append(m_rec.group(1).strip())
+                    rec_ages.append(age_days)
 
                 if len(targets) >= 6:
                     break
@@ -234,45 +241,85 @@ def _consensus_from_naver_or_hk(symbol: str) -> Dict:
             cur = None
 
         target = None
+        target_trend_pct = 0.0
+        recency_bonus = 0.0
         if targets:
-            arr = sorted(targets)
-            if len(arr) >= 5:
-                # 이상치 완화: 상하위 1개 제거한 절사평균
-                arr = arr[1:-1]
-            target = float(np.mean(arr))
+            # 최근성 가중(최신 리포트일수록 가중치↑)
+            w = np.array([np.exp(-float(a) / 21.0) for a in target_ages], dtype=float)
+            t = np.array(targets, dtype=float)
+            if len(t) >= 5:
+                # 이상치 완화: 상하위 1개 제거 후 가중평균
+                idx = np.argsort(t)
+                keep = idx[1:-1]
+                t = t[keep]
+                w = w[keep]
+            target = float(np.average(t, weights=w)) if w.sum() > 0 else float(np.mean(t))
+
+            # 목표가 추세(최근 대비 과거)
+            if len(t) >= 2:
+                latest_i = int(np.argmin(np.array(target_ages)[:len(targets)]))
+                oldest_i = int(np.argmax(np.array(target_ages)[:len(targets)]))
+                latest_t = float(targets[latest_i])
+                oldest_t = float(targets[oldest_i])
+                if oldest_t > 0:
+                    target_trend_pct = (latest_t / oldest_t - 1) * 100
+
+            # 리포트 최신도 보너스
+            avg_age = float(np.average(np.array(target_ages, dtype=float), weights=w)) if w.sum() > 0 else float(np.mean(target_ages))
+            recency_bonus = float(np.clip((31 - avg_age) / 31 * 8, 0, 8))
 
         up = ((target / cur - 1) * 100) if (target and cur) else None
 
         rec_scores = [x for x in (_recommendation_to_score(r) for r in recs) if isinstance(x, (int, float))]
         mean = float(np.mean(rec_scores)) if rec_scores else None
 
+        # 최근성 가중 투자의견 평균
+        w_rec = np.array([np.exp(-float(a) / 21.0) for a in rec_ages], dtype=float) if rec_ages else np.array([], dtype=float)
+        if len(rec_scores) == len(rec_ages) and len(rec_scores) > 0 and w_rec.sum() > 0:
+            mean_w = float(np.average(np.array(rec_scores, dtype=float), weights=w_rec))
+        else:
+            mean_w = mean
+
         b = {"buy": 0, "hold": 0, "sell": 0}
-        for r in recs:
+        b_w = {"buy": 0.0, "hold": 0.0, "sell": 0.0}
+        for i, r in enumerate(recs):
             k = _recommendation_bucket(r)
             if k:
                 b[k] += 1
+                wi = float(np.exp(-float(rec_ages[i]) / 21.0)) if i < len(rec_ages) else 1.0
+                b_w[k] += wi
         total_op = max(1, sum(b.values()))
         buy_ratio = b["buy"] / total_op
         sell_ratio = b["sell"] / total_op
+        total_w = max(1e-9, sum(b_w.values()))
+        buy_ratio_w = b_w["buy"] / total_w
+        sell_ratio_w = b_w["sell"] / total_w
 
         score = 50.0
-        # 업사이드는 점수에서 제외: 투자의견 방향 + 표본 수(최근 1개월)만 반영
-        if isinstance(mean, (int, float)):
-            # 매수 우위(recommendationMean 낮을수록) 가중 강화
-            score += float(np.clip((3.2 - mean) * 10, -15, 20))
-        # 투자의견 분포 반영(매수비율↑, 매도비율↓)
-        score += float(np.clip((buy_ratio - sell_ratio) * 25, -15, 25))
-        # 표본 수 가중 강화 (최근 1개월 + 증권사 중복제거 후 개수)
+        # 업사이드는 점수에서 제외: 방향/분포/표본/추세/최신도 반영
+        if isinstance(mean_w, (int, float)):
+            score += float(np.clip((3.2 - mean_w) * 10, -15, 20))
+        # 분포(가중 + 비가중 평균 혼합)
+        dist_raw = 0.7 * (buy_ratio_w - sell_ratio_w) + 0.3 * (buy_ratio - sell_ratio)
+        score += float(np.clip(dist_raw * 25, -15, 25))
+        # 표본 수
         score += float(np.clip(len(targets) * 3.0, 0, 20))
+        # 목표가 추세(상향 조정 가점)
+        score += float(np.clip(target_trend_pct / 2.0, -8, 8))
+        # 최신도 보너스
+        score += recency_bonus
 
         return {
             "targetMeanPrice": None if target is None else round(target, 2),
             "upsidePct": None if up is None else round(float(up), 2),
-            "recommendationMean": None if mean is None else round(float(mean), 2),
+            "recommendationMean": None if mean_w is None else round(float(mean_w), 2),
             "recommendationKey": None,
             "analystOpinions": len(targets),
             "opinionDistribution": b,
+            "targetTrendPct": round(float(target_trend_pct), 2),
+            "freshnessBonus": round(float(recency_bonus), 2),
             "source": "naver_research",
+            "confidence": round(float(np.clip((len(targets) / 6) * 100, 0, 100)), 2),
             "score": round(float(np.clip(score, 0, 100)), 2),
         }
     except Exception:
@@ -284,6 +331,7 @@ def _consensus_from_naver_or_hk(symbol: str) -> Dict:
             "analystOpinions": 0,
             "opinionDistribution": {"buy": 0, "hold": 0, "sell": 0},
             "source": "naver_research",
+            "confidence": 0.0,
             "score": 50.0,
         }
 
@@ -327,6 +375,7 @@ def _consensus_from_yfinance(symbol: str) -> Dict:
             "analystOpinions": n,
             "opinionDistribution": b,
             "source": "yfinance",
+            "confidence": round(float(np.clip(((float(n) if isinstance(n, (int, float)) else 0.0) / 20.0) * 100, 0, 100)), 2),
             "score": round(float(np.clip(score, 0, 100)), 2),
         }
     except Exception:
@@ -338,6 +387,7 @@ def _consensus_from_yfinance(symbol: str) -> Dict:
             "analystOpinions": None,
             "opinionDistribution": {"buy": 0, "hold": 0, "sell": 0},
             "source": "yfinance",
+            "confidence": 0.0,
             "score": 50.0,
         }
 
@@ -530,11 +580,20 @@ def evaluate_asset(asset: Asset) -> Dict | None:
     technical = _technical_score(s, target_price=report_consensus.get("targetMeanPrice"))
 
     # 사용자 요청 반영: 리서치/뉴스/기술적분석 = 6:2:2
-    score = (
+    base_score = (
         0.60 * report_consensus["score"] +
         0.20 * crowd["score"] +
         0.20 * technical["score"]
     )
+
+    # 전체 신뢰도(데이터 품질) 고도화
+    r_conf = float(report_consensus.get("confidence", 50.0) or 0.0)
+    c_conf = float(np.clip(((crowd.get("headlineCount", 0) or 0) / 8.0) * 100, 0, 100))
+    t_conf = 85.0 if technical.get("setup") in {"pullback-in-uptrend", "healthy-trend"} else 70.0
+    confidence = 0.60 * r_conf + 0.20 * c_conf + 0.20 * t_conf
+
+    # 최종점수 = 기본점수 + 신뢰도 보정
+    score = 0.85 * base_score + 0.15 * confidence
 
     cur = float(s.iloc[-1])
     atrp = float(s.pct_change().abs().tail(14).mean()) if len(s) > 20 else 0.03
@@ -554,6 +613,8 @@ def evaluate_asset(asset: Asset) -> Dict | None:
         "name": asset.name,
         "category": asset.category,
         "score": round(float(score), 2),
+        "scoreBase": round(float(base_score), 2),
+        "confidence": round(float(confidence), 2),
         "currentPrice": round(cur, 2),
         "expectedLossPct": round(float(expected_loss_pct), 2),
         "expectedReturnPct": round(float(expected_return1_pct), 2),
@@ -665,7 +726,7 @@ def build_report(market: str = "all", progress_cb=None) -> Dict:
         "generatedAt": datetime.now(UTC).isoformat().replace("+00:00", "Z"),
         "model": f"{market_label} Single-Stock Dual Ranking v5 (No Momentum + Technical)",
         "market": mk,
-        "methodology": "S=0.60R+0.20C+0.20T (R: OpinionDirection+OpinionDistribution+SampleCount / C: CrowdNews / T: Technical)",
+        "methodology": "S=0.85*(0.60R+0.20C+0.20T)+0.15*Confidence (R: Direction+Distribution+Sample+Trend+Freshness)",
         "topPick": top,
         "rankings": rows,
         "riskAdjustedRankings": risk_adjusted,
