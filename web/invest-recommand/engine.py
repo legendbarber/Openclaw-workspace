@@ -634,20 +634,20 @@ def evaluate_asset(asset: Asset) -> Dict | None:
     technical = _technical_score(s, target_price=report_consensus.get("targetMeanPrice"))
     theme = _theme_signal(asset.symbol)
 
-    # 사용자 요청 반영: 리서치/뉴스/기술적분석 + 테마
+    # 사용자 요청 반영: 테마 > 리서치 > 뉴스 > 기술적분석
     base_score = (
-        0.50 * report_consensus["score"] +
+        0.40 * theme["score"] +
+        0.30 * report_consensus["score"] +
         0.20 * crowd["score"] +
-        0.20 * technical["score"] +
-        0.10 * theme["score"]
+        0.10 * technical["score"]
     )
 
-    # 전체 신뢰도(데이터 품질) 고도화
+    # 전체 신뢰도(데이터 품질)도 동일 우선순위 반영
     r_conf = float(report_consensus.get("confidence", 50.0) or 0.0)
     c_conf = float(np.clip(((crowd.get("headlineCount", 0) or 0) / 8.0) * 100, 0, 100))
     t_conf = 85.0 if technical.get("setup") in {"pullback-in-uptrend", "healthy-trend"} else 70.0
     th_conf = 90.0 if theme.get("matched") else 50.0
-    confidence = 0.50 * r_conf + 0.20 * c_conf + 0.20 * t_conf + 0.10 * th_conf
+    confidence = 0.40 * th_conf + 0.30 * r_conf + 0.20 * c_conf + 0.10 * t_conf
 
     # 최종점수 = 기본점수 + 신뢰도 보정
     score = 0.85 * base_score + 0.15 * confidence
@@ -784,7 +784,7 @@ def build_report(market: str = "all", progress_cb=None) -> Dict:
         "generatedAt": datetime.now(UTC).isoformat().replace("+00:00", "Z"),
         "model": f"{market_label} Single-Stock Dual Ranking v5 (No Momentum + Technical)",
         "market": mk,
-        "methodology": "S=0.85*(0.50R+0.20C+0.20T+0.10TH)+0.15*Confidence (R: Direction+Distribution+Sample+Trend+Freshness)",
+        "methodology": "S=0.85*(0.40TH+0.30R+0.20C+0.10T)+0.15*Confidence (TH>R>C>T)",
         "topPick": top,
         "rankings": rows,
         "riskAdjustedRankings": risk_adjusted,
