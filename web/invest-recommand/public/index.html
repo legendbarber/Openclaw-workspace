@@ -38,6 +38,8 @@
       </div>
     </div>
 
+    <div id="progressBox" class="card" style="display:none"></div>
+
     <div class="kpi" id="kpiRow">
       <div class="item"><div class="tiny">Top Pick</div><b id="kpiSymbol">-</b></div>
       <div class="item"><div class="tiny">종합점수</div><b id="kpiScore">-</b></div>
@@ -80,9 +82,49 @@ async function apiGet(url){
   try{
     const res = await fetch(url, { cache: 'no-store' });
     if(!res.ok) throw new Error('HTTP '+res.status);
-    return await res.json();
+    const data = await res.json();
+    data.__status = res.status;
+    return data;
   } finally {
     setLoading(false);
+  }
+}
+
+function showProgress(text){
+  const el = document.getElementById('progressBox');
+  if(!el) return;
+  el.style.display = 'block';
+  el.innerHTML = text;
+}
+function hideProgress(){
+  const el = document.getElementById('progressBox');
+  if(!el) return;
+  el.style.display = 'none';
+  el.innerHTML = '';
+}
+
+async function waitReportReady(market){
+  while(true){
+    const p = await apiGet(`/api/report/progress?market=${market}&t=${Date.now()}`);
+    if(p.status==='done'){
+      hideProgress();
+      return;
+    }
+    if(p.status==='error'){
+      showProgress(`❌ 분석 실패: ${p.progress?.error || 'unknown error'}`);
+      throw new Error(p.progress?.error || 'report_job_failed');
+    }
+    if(p.status==='running'){
+      const pr = p.progress || {};
+      const done = pr.done ?? 0;
+      const total = pr.total ?? 0;
+      const pct = pr.progressPct ?? 0;
+      const sym = pr.symbol || '-';
+      showProgress(`⏳ 분석 중... ${done}/${total} (${pct}%) · 현재 ${sym}`);
+    } else {
+      showProgress('⏳ 분석 준비 중...');
+    }
+    await new Promise(r=>setTimeout(r, 1200));
   }
 }
 function pctFrom(base, target){
@@ -268,7 +310,13 @@ async function renderMiniChart(symbol, elId){
 
 async function loadData(){
   const market = getMarket();
-  const d = await apiGet(`/api/report?market=${market}&t=${Date.now()}`);
+  let d = await apiGet(`/api/report?market=${market}&t=${Date.now()}`);
+  if(d.status==='running' || d.__status===202){
+    const pr = d.progress || {};
+    showProgress(`⏳ 분석 시작... ${pr.done ?? 0}/${pr.total ?? 0} (${pr.progressPct ?? 0}%)`);
+    await waitReportReady(market);
+    d = await apiGet(`/api/report?market=${market}&t=${Date.now()}`);
+  }
 
   document.getElementById('meta').innerHTML = `
     <b>생성시각:</b> ${new Date(d.generatedAt).toLocaleString()}<br>

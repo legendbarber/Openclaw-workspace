@@ -6,7 +6,7 @@ import time
 import urllib.parse
 import urllib.request
 from dataclasses import dataclass
-from datetime import datetime, UTC
+from datetime import datetime, UTC, timedelta
 from pathlib import Path
 from typing import Dict, List
 from zoneinfo import ZoneInfo
@@ -169,10 +169,22 @@ def _consensus_from_naver_or_hk(symbol: str) -> Dict:
         targets = []
         recs = []
         used_brokers = set()
+        cutoff = datetime.now(KST).date() - timedelta(days=31)
+
         for nid in nids:
             try:
                 read_url = f"https://finance.naver.com/research/company_read.naver?nid={nid}&page=1&searchType=itemCode&itemCode={code}"
                 body = _safe_fetch_text(read_url, encoding="euc-kr")
+
+                # 리포트 날짜 필터: 최근 1개월 이내만 반영
+                m_date = re.search(r'<p class="source">[\s\S]*?<b class="bar">\|</b>\s*(\d{4}\.\d{2}\.\d{2})\s*<b class="bar">\|</b>', body)
+                if m_date:
+                    try:
+                        d = datetime.strptime(m_date.group(1), "%Y.%m.%d").date()
+                        if d < cutoff:
+                            continue
+                    except Exception:
+                        continue
 
                 # 동일 증권사 중복 방지 (가장 최신 리포트 1개만 사용)
                 m_broker = re.search(r'<p class="source">\s*([^<|]+?)\s*<b class="bar">\|</b>', body)
@@ -543,7 +555,7 @@ def _is_etf_like(row: Dict) -> bool:
     return symbol in {"SPY", "QQQ", "EEM", "EFA", "VNQ", "TLT", "IEF", "LQD", "GLD", "SLV", "USO", "DBC"}
 
 
-def build_report(market: str = "all") -> Dict:
+def build_report(market: str = "all", progress_cb=None) -> Dict:
     rows = []
     failed = []
 
@@ -554,12 +566,19 @@ def build_report(market: str = "all") -> Dict:
     elif mk == "kr":
         assets = [a for a in UNIVERSE if a.category.startswith("kr-")]
 
-    for a in assets:
+    total_assets = len(assets)
+    for i, a in enumerate(assets, start=1):
         r = evaluate_asset(a)
         if r is None:
             failed.append(a.symbol)
         else:
             rows.append(r)
+
+        if callable(progress_cb):
+            try:
+                progress_cb(done=i, total=total_assets, symbol=a.symbol)
+            except Exception:
+                pass
 
     # 사용자 요청: ETF 제외 (단일 주식만 허용)
     rows = [r for r in rows if not _is_etf_like(r)]

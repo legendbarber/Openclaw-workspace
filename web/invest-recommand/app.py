@@ -16,6 +16,7 @@ from theme_leader import (
 from theme_logic_kr import save_kr_theme_report
 import threading
 import time
+import uuid
 from datetime import datetime
 from zoneinfo import ZoneInfo
 import urllib.request
@@ -30,6 +31,8 @@ TEMA_WEB_V2_ORIGIN = "http://127.0.0.1:3010"
 # lightweight in-memory cache for faster UI response
 _REPORT_CACHE = {}
 _REPORT_TTL_SEC = 60
+_REPORT_PROGRESS = {}
+_REPORT_LOCK = threading.Lock()
 _CHART_CACHE = {}
 _CHART_TTL_SEC = 300
 
@@ -52,6 +55,46 @@ def _snapshot_worker():
 threading.Thread(target=_snapshot_worker, daemon=True).start()
 
 
+def _run_report_job(market: str, task_id: str):
+    def _progress_cb(done: int, total: int, symbol: str):
+        with _REPORT_LOCK:
+            st = _REPORT_PROGRESS.get(market, {})
+            if st.get("taskId") != task_id:
+                return
+            st.update({
+                "status": "running",
+                "done": done,
+                "total": total,
+                "symbol": symbol,
+                "progressPct": round((done / total) * 100, 2) if total else 0.0,
+                "updatedAt": datetime.now(KST).isoformat(),
+            })
+            _REPORT_PROGRESS[market] = st
+
+    try:
+        data = build_report(market=market, progress_cb=_progress_cb)
+        with _REPORT_LOCK:
+            _REPORT_CACHE[market] = {"ts": time.time(), "data": data}
+            st = _REPORT_PROGRESS.get(market, {})
+            st.update({
+                "status": "done",
+                "done": st.get("total", 0),
+                "progressPct": 100.0,
+                "updatedAt": datetime.now(KST).isoformat(),
+                "error": None,
+            })
+            _REPORT_PROGRESS[market] = st
+    except Exception as e:
+        with _REPORT_LOCK:
+            st = _REPORT_PROGRESS.get(market, {})
+            st.update({
+                "status": "error",
+                "error": str(e),
+                "updatedAt": datetime.now(KST).isoformat(),
+            })
+            _REPORT_PROGRESS[market] = st
+
+
 @app.get('/api/report')
 def api_report():
     market = (request.args.get('market', default='all', type=str) or 'all').lower()
@@ -63,9 +106,38 @@ def api_report():
     if cached and (now - cached.get('ts', 0) <= _REPORT_TTL_SEC):
         return jsonify(cached['data'])
 
-    data = build_report(market=market)
-    _REPORT_CACHE[market] = {"ts": now, "data": data}
-    return jsonify(data)
+    with _REPORT_LOCK:
+        st = _REPORT_PROGRESS.get(market)
+        if st and st.get("status") == "running":
+            return jsonify({"status": "running", "market": market, "progress": st}), 202
+
+        task_id = str(uuid.uuid4())
+        _REPORT_PROGRESS[market] = {
+            "taskId": task_id,
+            "status": "running",
+            "done": 0,
+            "total": 0,
+            "symbol": None,
+            "progressPct": 0.0,
+            "startedAt": datetime.now(KST).isoformat(),
+            "updatedAt": datetime.now(KST).isoformat(),
+            "error": None,
+        }
+        threading.Thread(target=_run_report_job, args=(market, task_id), daemon=True).start()
+
+    return jsonify({"status": "running", "market": market, "progress": _REPORT_PROGRESS.get(market)}), 202
+
+
+@app.get('/api/report/progress')
+def api_report_progress():
+    market = (request.args.get('market', default='all', type=str) or 'all').lower()
+    if market not in {'all', 'kr', 'us'}:
+        market = 'all'
+
+    st = _REPORT_PROGRESS.get(market)
+    if not st:
+        return jsonify({"status": "idle", "market": market})
+    return jsonify({"status": st.get("status", "idle"), "market": market, "progress": st})
 
 
 @app.get('/api/snapshot/save')
