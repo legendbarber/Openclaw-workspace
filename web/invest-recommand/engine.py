@@ -436,6 +436,18 @@ def _consensus_from_naver_or_hk(symbol: str, name: str | None = None) -> Dict:
             avg_age = float(np.average(np.array(target_ages, dtype=float), weights=w)) if w.sum() > 0 else float(np.mean(target_ages))
             recency_bonus = float(np.clip((31 - avg_age) / 31 * 8, 0, 8))
 
+        # 한경 목록에서 목표가 추출이 안 되는 종목은 yfinance 목표가를 보조값으로 사용
+        target_fallback = False
+        if target is None:
+            try:
+                yfi = yf.Ticker(symbol).info or {}
+                y_target = yfi.get("targetMeanPrice")
+                if isinstance(y_target, (int, float)) and float(y_target) > 0:
+                    target = float(y_target)
+                    target_fallback = True
+            except Exception:
+                pass
+
         up = ((target / cur - 1) * 100) if (target and cur) else None
 
         rec_scores = [x for x in (_recommendation_to_score(r) for r in recs) if isinstance(x, (int, float))]
@@ -480,7 +492,7 @@ def _consensus_from_naver_or_hk(symbol: str, name: str | None = None) -> Dict:
             "opinionDistribution": b,
             "freshnessBonus": round(float(recency_bonus), 2),
             "reportLinks": hk_reports,
-            "source": "hankyung_consensus",
+            "source": "hankyung_consensus+yf_target_fallback" if target_fallback else "hankyung_consensus",
             "confidence": round(float(np.clip((sample_n / 6) * 100, 0, 100)), 2),
             "score": round(float(np.clip(score, 0, 100)), 2),
         }
