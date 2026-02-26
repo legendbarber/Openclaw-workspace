@@ -187,6 +187,8 @@ def clear_runtime_caches() -> None:
     _CONS_CACHE.clear()
     _HK_REPORT_CACHE.clear()
     _THEME_META_CACHE.clear()
+    _NAVER_THEME_CACHE["ts"] = 0.0
+    _NAVER_THEME_CACHE["map"] = {}
 
 
 def get_universe_stats() -> Dict:
@@ -208,6 +210,7 @@ POSITIVE = ["beat", "strong", "upgrade", "rally", "surge", "record", "gain"]
 NEGATIVE = ["miss", "downgrade", "drop", "fall", "weak", "risk", "lawsuit"]
 _THEME_META_CACHE: Dict[str, Dict] = {}
 _HK_REPORT_CACHE: Dict[str, Dict] = {}
+_NAVER_THEME_CACHE: Dict[str, object] = {"ts": 0.0, "map": {}}
 
 
 def _download_close(symbol: str, period: str = "1y") -> pd.Series | None:
@@ -719,52 +722,55 @@ def _consensus(symbol: str, name: str | None = None) -> Dict:
     return data
 
 
-def _to_theme_label(symbol: str, name: str, sector: str | None, industry: str | None) -> str:
-    s = (sector or "").lower()
-    i = (industry or "").lower()
-    n = (name or "")
-    sym = (symbol or "").upper()
+def _load_naver_theme_map() -> Dict[str, Dict]:
+    now = time.time()
+    cached = _NAVER_THEME_CACHE.get("map", {}) or {}
+    ts = float(_NAVER_THEME_CACHE.get("ts", 0.0) or 0.0)
+    if cached and (now - ts) < 60 * 60 * 6:
+        return cached
 
-    # KR keyword mapping (직관형)
-    kr_rules = [
-        (lambda: any(k in n for k in ["반도체", "하이닉스", "삼성전자", "한미반도체", "리노공업", "이오테크닉스"]), "반도체"),
-        (lambda: any(k in n for k in ["2차전지", "배터리", "에코프로", "포스코퓨처엠", "엘앤에프", "삼성sdi", "lg에너지솔루션"]), "2차전지"),
-        (lambda: any(k in n for k in ["자동차", "현대차", "기아", "모비스", "만도", "한온시스템"]), "자동차/부품"),
-        (lambda: any(k in n for k in ["방산", "한화에어로", "lignex1", "lig넥스원", "현대로템", "한국항공우주"]), "방산/우주"),
-        (lambda: any(k in n for k in ["조선", "현대중공업", "한화오션", "삼성중공업"]), "조선/해양"),
-        (lambda: any(k in n for k in ["전력", "변압기", "효성중공업", "ls electric", "일렉트릭"]), "전력기기/인프라"),
-        (lambda: any(k in n for k in ["바이오", "제약", "셀트리온", "삼성바이오", "유한양행", "한미약품"]), "바이오/헬스케어"),
-        (lambda: any(k in n for k in ["인터넷", "플랫폼", "네이버", "카카오"]), "인터넷/플랫폼"),
-        (lambda: any(k in n for k in ["은행", "금융", "신한", "kb", "하나금융", "우리금융"]), "은행/금융"),
-    ]
-    for cond, label in kr_rules:
-        try:
-            if cond():
-                return label
-        except Exception:
-            pass
+    out: Dict[str, Dict] = {}
 
-    # Global mapping
-    if "semiconductor" in s or "semiconductor" in i:
-        return "반도체"
-    if "software" in s or "internet" in s or "interactive media" in i:
-        return "인터넷/소프트웨어"
-    if "banks" in i or "financial" in s:
-        return "은행/금융"
-    if "oil" in i or "gas" in i or "energy" in s:
-        return "에너지"
-    if "aerospace" in i or "defense" in i:
-        return "방산/우주"
-    if "auto" in i or "autom" in i:
-        return "자동차/부품"
-    if "biotech" in i or "pharma" in i or "health" in s:
-        return "바이오/헬스케어"
-    if "utility" in s or "electrical" in i or "power" in i:
-        return "전력/유틸리티"
+    def _fetch(url: str) -> str:
+        return _safe_fetch_text(url, encoding="euc-kr")
 
-    if sector and industry:
-        return f"{sector} > {industry}"
-    return sector or industry or "UNKNOWN"
+    try:
+        # theme list pages
+        theme_links = []
+        for p in range(1, 8):
+            html = _fetch(f"https://finance.naver.com/sise/theme.naver?&page={p}")
+            links = re.findall(r'href="(/sise/theme_detail\.naver\?no=\d+)"', html)
+            if not links:
+                continue
+            for lk in links:
+                if lk not in theme_links:
+                    theme_links.append(lk)
+
+        # each theme detail -> stock code mapping
+        for rel in theme_links[:400]:
+            try:
+                detail = _fetch("https://finance.naver.com" + rel)
+                m_theme = re.search(r'<div class="h_company">\s*<h2>\s*([^<]+?)\s*</h2>', detail)
+                theme_name = m_theme.group(1).strip() if m_theme else None
+                if not theme_name:
+                    continue
+
+                for code, nm in re.findall(r'item/main\.naver\?code=(\d{6})[^>]*>([^<]+)</a>', detail):
+                    code6 = code.strip()
+                    if not code6:
+                        continue
+                    rec = out.get(code6)
+                    cand = {"theme": theme_name, "name": nm.strip(), "source": "naver_theme"}
+                    if rec is None:
+                        out[code6] = cand
+            except Exception:
+                continue
+    except Exception:
+        pass
+
+    _NAVER_THEME_CACHE["ts"] = now
+    _NAVER_THEME_CACHE["map"] = out
+    return out
 
 
 def _get_symbol_theme_meta(symbol: str) -> Dict:
@@ -772,14 +778,31 @@ def _get_symbol_theme_meta(symbol: str) -> Dict:
     if sym in _THEME_META_CACHE:
         return _THEME_META_CACHE[sym]
 
-    out = {"theme": "UNKNOWN", "sector": None, "industry": None}
+    out = {"theme": "UNKNOWN", "sector": None, "industry": None, "source": "unknown"}
+
+    # KR 종목은 네이버 증권 테마를 최우선 사용
+    m = re.match(r"^(\d{6})\.(KS|KQ)$", sym)
+    if m:
+        code6 = m.group(1)
+        theme_map = _load_naver_theme_map()
+        rec = theme_map.get(code6)
+        if rec:
+            out = {
+                "theme": rec.get("theme") or "UNKNOWN",
+                "sector": None,
+                "industry": None,
+                "source": "naver_theme",
+            }
+            _THEME_META_CACHE[sym] = out
+            return out
+
+    # non-KR fallback (기존 유지)
     try:
         info = yf.Ticker(sym).info or {}
         sector = (info.get("sector") or "").strip()
         industry = (info.get("industry") or "").strip()
-
-        theme = _to_theme_label(sym, "", sector, industry)
-        out = {"theme": theme, "sector": sector or None, "industry": industry or None}
+        theme = f"{sector} > {industry}" if (sector and industry) else (sector or industry or "UNKNOWN")
+        out = {"theme": theme, "sector": sector or None, "industry": industry or None, "source": "yfinance"}
     except Exception:
         pass
 
@@ -795,9 +818,8 @@ def _apply_runtime_theme_scores(rows: List[Dict]) -> List[Dict]:
     # 1) 각 종목 theme 메타 부착
     for r in rows:
         sym = r.get("symbol")
-        nm = r.get("name", "")
         meta = _get_symbol_theme_meta(sym)
-        theme_label = _to_theme_label(sym, nm, meta.get("sector"), meta.get("industry"))
+        theme_label = meta.get("theme") or "UNKNOWN"
         r.setdefault("components", {})["theme"] = {
             "theme": theme_label,
             "sector": meta.get("sector"),
@@ -806,7 +828,7 @@ def _apply_runtime_theme_scores(rows: List[Dict]) -> List[Dict]:
             "leaderScore": None,
             "score": 50.0,
             "matched": False,
-            "source": "runtime-grouping",
+            "source": meta.get("source") or "runtime-grouping",
         }
 
     # 2) theme별 그룹 스코어 계산
@@ -950,7 +972,7 @@ def _risk_score(s: pd.Series) -> Dict:
 
 
 def _technical_score(s: pd.Series, target_price: float | None = None) -> Dict:
-    """가격/차트 기반 기술적 진입 타이밍 점수 (모멘텀과 분리)."""
+    """기술적 분석은 단순화: 과열국면 / 조정국면 탐지 중심."""
     close = s.astype(float)
     cur = float(close.iloc[-1])
 
@@ -958,63 +980,49 @@ def _technical_score(s: pd.Series, target_price: float | None = None) -> Dict:
     ma60 = float(close.rolling(60).mean().iloc[-1])
     ma120 = float(close.rolling(120).mean().iloc[-1]) if len(close) >= 120 else ma60
 
-    # RSI(14)
     delta = close.diff()
     gain = delta.where(delta > 0, 0.0)
     loss = (-delta.where(delta < 0, 0.0))
     avg_gain = float(gain.rolling(14).mean().iloc[-1])
     avg_loss = float(loss.rolling(14).mean().iloc[-1])
-    if avg_loss == 0:
-        rsi14 = 100.0
-    else:
-        rs = avg_gain / avg_loss
-        rsi14 = 100 - (100 / (1 + rs))
+    rsi14 = 100.0 if avg_loss == 0 else (100 - (100 / (1 + (avg_gain / avg_loss))))
 
     dist_ma20 = (cur / ma20 - 1) * 100 if ma20 else 0.0
     high20 = float(close.tail(20).max())
     from_high20 = (cur / high20 - 1) * 100 if high20 else 0.0
 
+    uptrend = (ma20 > ma60)
+
+    # 기본점수
     score = 50.0
+    setup = "neutral"
+    regime = "neutral"
 
-    # 1) 추세 정합성: 장기적으로 우상향 구조 선호
-    if ma20 > ma60 > ma120:
-        score += 15
-    elif ma20 > ma60:
-        score += 8
-    else:
-        score -= 8
+    # 과열국면: RSI 과열 + 20일선 과도 이격 + 고점 근접
+    overheat = (rsi14 >= 72 and dist_ma20 >= 6) or (rsi14 >= 75) or (dist_ma20 >= 9 and from_high20 >= -2)
+    # 조정국면: 추세는 유지하면서 눌림
+    adjustment = uptrend and (35 <= rsi14 <= 58) and (-8 <= dist_ma20 <= -1) and (-12 <= from_high20 <= -2)
 
-    # 2) RSI 과열/침체 필터: 과열 추격 페널티, 적정 눌림 선호
-    if 38 <= rsi14 <= 55:
-        score += 20
-        setup = "pullback-in-uptrend"
-    elif 55 < rsi14 <= 68:
-        score += 8
-        setup = "healthy-trend"
-    elif rsi14 > 72:
-        score -= 20
-        setup = "overbought"
-    elif rsi14 < 30:
-        score -= 8
-        setup = "falling-knife-risk"
-    else:
-        setup = "neutral"
-
-    # 3) 이격도: 너무 벌어진 추격 매수 방지
-    if dist_ma20 > 8:
+    if overheat:
+        regime = "overheat"
+        setup = "overheat-zone"
         score -= 18
-    elif dist_ma20 > 4:
-        score -= 8
-    elif -6 <= dist_ma20 <= -1:
-        score += 8
-
-    # 4) 최근 고점 대비 눌림
-    if -10 <= from_high20 <= -3:
-        score += 10
-    elif from_high20 < -18:
-        score -= 10
-
-    headroom_pct = None
+        if rsi14 >= 78:
+            score -= 6
+        if dist_ma20 >= 10:
+            score -= 6
+    elif adjustment:
+        regime = "adjustment"
+        setup = "adjustment-zone"
+        score += 18
+        if 40 <= rsi14 <= 52:
+            score += 4
+        if -6 <= dist_ma20 <= -2:
+            score += 4
+    else:
+        regime = "neutral"
+        setup = "neutral-zone"
+        score += 2 if uptrend else -2
 
     score = float(np.clip(score, 0, 100))
 
@@ -1027,7 +1035,8 @@ def _technical_score(s: pd.Series, target_price: float | None = None) -> Dict:
         "ma60": round(ma60, 2),
         "ma120": round(ma120, 2),
         "setup": setup,
-        "headroomPct": None if headroom_pct is None else round(float(headroom_pct), 2),
+        "regime": regime,
+        "headroomPct": None,
     }
 
 
@@ -1058,7 +1067,13 @@ def evaluate_asset(asset: Asset) -> Dict | None:
     # 데이터 품질 기반 신뢰도
     r_conf = float(report_consensus.get("confidence", 50.0) or 0.0)
     c_conf = float(np.clip(((crowd.get("headlineCount", 0) or 0) / 8.0) * 100, 0, 100))
-    t_conf = 85.0 if technical.get("setup") in {"pullback-in-uptrend", "healthy-trend"} else 70.0
+    t_setup = technical.get("setup")
+    if t_setup == "adjustment-zone":
+        t_conf = 85.0
+    elif t_setup == "overheat-zone":
+        t_conf = 65.0
+    else:
+        t_conf = 72.0
     confidence = 0.60 * r_conf + 0.25 * c_conf + 0.15 * t_conf
 
     score = 0.9 * base_score + 0.1 * confidence
@@ -1201,7 +1216,7 @@ def build_report(market: str = "all", candidate_limit: int | None = None, progre
         "model": f"{market_label} Single-Stock Dual Ranking v5 (No Momentum + Technical)",
         "market": mk,
         "candidateLimit": total_assets,
-        "methodology": "S=RuntimeThemeAdjusted: base(R/C/T)+runtime-theme(TH)+small valuation-gap adjustment(upside capped)",
+        "methodology": "S=RuntimeThemeAdjusted: base(R/C/T; T=overheat/adjustment regime)+NaverTheme(TH)+small valuation-gap adjustment(upside capped)",
         "topPick": top,
         "rankings": rows,
         "riskAdjustedRankings": risk_adjusted,
