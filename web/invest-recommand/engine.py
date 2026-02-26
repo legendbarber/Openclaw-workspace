@@ -972,70 +972,78 @@ def _risk_score(s: pd.Series) -> Dict:
 
 
 def _technical_score(s: pd.Series, target_price: float | None = None) -> Dict:
-    """기술적 분석은 단순화: 과열국면 / 조정국면 탐지 중심."""
+    """기술적 분석: 방향성 분석 + 크로스 분석 + 이격도 분석만 사용."""
     close = s.astype(float)
     cur = float(close.iloc[-1])
 
-    ma20 = float(close.rolling(20).mean().iloc[-1])
-    ma60 = float(close.rolling(60).mean().iloc[-1])
-    ma120 = float(close.rolling(120).mean().iloc[-1]) if len(close) >= 120 else ma60
+    ma20_series = close.rolling(20).mean()
+    ma60_series = close.rolling(60).mean()
+    ma120_series = close.rolling(120).mean()
 
-    delta = close.diff()
-    gain = delta.where(delta > 0, 0.0)
-    loss = (-delta.where(delta < 0, 0.0))
-    avg_gain = float(gain.rolling(14).mean().iloc[-1])
-    avg_loss = float(loss.rolling(14).mean().iloc[-1])
-    rsi14 = 100.0 if avg_loss == 0 else (100 - (100 / (1 + (avg_gain / avg_loss))))
+    ma20 = float(ma20_series.iloc[-1])
+    ma60 = float(ma60_series.iloc[-1])
+    ma120 = float(ma120_series.iloc[-1]) if len(close) >= 120 else ma60
 
+    # 1) 방향성 분석: MA20 / MA60 기울기
+    ma20_prev = float(ma20_series.iloc[-6]) if len(ma20_series.dropna()) >= 6 else ma20
+    ma60_prev = float(ma60_series.iloc[-6]) if len(ma60_series.dropna()) >= 6 else ma60
+    dir20 = (ma20 / ma20_prev - 1) * 100 if ma20_prev else 0.0
+    dir60 = (ma60 / ma60_prev - 1) * 100 if ma60_prev else 0.0
+
+    # 2) 크로스 분석: MA20-MA60 관계 변화
+    spread_now = ma20 - ma60
+    spread_prev = (float(ma20_series.iloc[-6]) - float(ma60_series.iloc[-6])) if (len(ma20_series.dropna()) >= 6 and len(ma60_series.dropna()) >= 6) else spread_now
+
+    # 3) 이격도 분석: 현재가 vs MA20
     dist_ma20 = (cur / ma20 - 1) * 100 if ma20 else 0.0
-    high20 = float(close.tail(20).max())
-    from_high20 = (cur / high20 - 1) * 100 if high20 else 0.0
 
-    uptrend = (ma20 > ma60)
-
-    # 기본점수
     score = 50.0
-    setup = "neutral"
-    regime = "neutral"
 
-    # 과열국면: RSI 과열 + 20일선 과도 이격 + 고점 근접
-    overheat = (rsi14 >= 72 and dist_ma20 >= 6) or (rsi14 >= 75) or (dist_ma20 >= 9 and from_high20 >= -2)
-    # 조정국면: 추세는 유지하면서 눌림
-    adjustment = uptrend and (35 <= rsi14 <= 58) and (-8 <= dist_ma20 <= -1) and (-12 <= from_high20 <= -2)
+    # 방향성 점수
+    if dir20 > 0.2 and dir60 >= 0:
+        score += 10
+    elif dir20 < -0.2 and dir60 <= 0:
+        score -= 10
 
-    if overheat:
-        regime = "overheat"
-        setup = "overheat-zone"
-        score -= 18
-        if rsi14 >= 78:
-            score -= 6
-        if dist_ma20 >= 10:
-            score -= 6
-    elif adjustment:
-        regime = "adjustment"
-        setup = "adjustment-zone"
-        score += 18
-        if 40 <= rsi14 <= 52:
-            score += 4
-        if -6 <= dist_ma20 <= -2:
-            score += 4
+    # 크로스 점수
+    if spread_prev <= 0 < spread_now:
+        score += 10  # 골든크로스 전환
+        cross_state = "golden-cross"
+    elif spread_prev >= 0 > spread_now:
+        score -= 10  # 데드크로스 전환
+        cross_state = "dead-cross"
     else:
-        regime = "neutral"
+        cross_state = "above-ma60" if spread_now > 0 else "below-ma60"
+        score += 4 if spread_now > 0 else -4
+
+    # 이격도 점수 (먹을 자리/과열)
+    if -8 <= dist_ma20 <= -2:
+        score += 16
+        setup = "adjustment-zone"
+        regime = "adjustment"
+    elif dist_ma20 >= 8:
+        score -= 16
+        setup = "overheat-zone"
+        regime = "overheat"
+    else:
         setup = "neutral-zone"
-        score += 2 if uptrend else -2
+        regime = "neutral"
 
     score = float(np.clip(score, 0, 100))
 
     return {
         "score": round(score, 2),
-        "rsi14": round(float(rsi14), 2),
+        "rsi14": None,
         "distMa20Pct": round(float(dist_ma20), 2),
-        "from20dHighPct": round(float(from_high20), 2),
+        "from20dHighPct": None,
         "ma20": round(ma20, 2),
         "ma60": round(ma60, 2),
         "ma120": round(ma120, 2),
         "setup": setup,
         "regime": regime,
+        "direction20Pct": round(float(dir20), 2),
+        "direction60Pct": round(float(dir60), 2),
+        "crossState": cross_state,
         "headroomPct": None,
     }
 
