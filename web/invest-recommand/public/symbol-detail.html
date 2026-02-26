@@ -1,66 +1,91 @@
-<!doctype html><html lang='ko'><head><meta charset='UTF-8'><meta name='viewport' content='width=device-width,initial-scale=1'><title>종목 상세 근거</title><style>body{margin:0;background:#111315;color:#e5e7eb;font-family:Inter,Arial,sans-serif}.wrap{max-width:1100px;margin:auto;padding:20px}.card{background:#1a1d21;border:1px solid #2b3138;border-radius:12px;padding:14px;margin-top:12px}.muted{color:#9aa4b2}a{color:#cbd5e1}.h{font-size:28px;font-weight:700}.chartbox{height:360px;min-height:360px;background:#0f172a;border:1px solid #24304f;border-radius:10px;padding:6px;overflow:hidden}</style></head><body><div class='wrap'><div><a href='/invest-recommend'>← 메인으로</a></div><div id='head' class='card'>불러오는 중...</div><div id='quick' class='card'></div><div id='chart' class='card'><b>가격 차트 (캔들+거래량+MA20/60)</b><div id='chartArea' class='chartbox' style='margin-top:8px'></div></div><div id='plan' class='card'></div><div id='reasons' class='card'></div></div><script>function fmt(v,d=2){return (v===null||v===undefined)?'-':Number(v).toLocaleString(undefined,{maximumFractionDigits:d});}function pct(v,d=2){if(v===null||v===undefined||Number.isNaN(Number(v)))return '-';const n=Number(v);const s=n>0?'+':'';return `${s}${n.toLocaleString(undefined,{maximumFractionDigits:d})}%`;}function getSymbol(){const parts=location.pathname.split('/');return decodeURIComponent(parts[parts.length-1]||'').toUpperCase();}function longExplain(r){const c=r.components||{};const rc=c.reportConsensus||{};const t=c.technical||{};const m=c.momentum||{};const risk=c.risk||{};const crowd=c.crowd||{};const liq=c.liquidityScore;const s=Number(r.score||0);const rr=Number(r.riskReward||0);const ret1=Number(r.expectedReturnPct||0);const loss=Math.abs(Number(r.expectedLossPct||0));const edge=(ret1-loss).toFixed(2);return `
-<b>1) 투자 아이디어 핵심</b><br>
-- 이 종목은 <b>기대수익(${pct(ret1)}) 대비 손실(${pct(-loss)})의 비대칭</b>을 노리는 트레이드.
-- 현재 시스템 종합점수는 <b>${fmt(s)}</b>, RR은 <b>${fmt(rr)}</b>로 계산됨.
-- 간단히 말해: “틀릴 때 작게 잃고, 맞을 때 크게 먹는 구조”를 목표로 한 셋업.<br><br>
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>종목 근거 상세</title>
+  <style>
+    body{margin:0;background:#111315;color:#e5e7eb;font-family:Inter,Arial,sans-serif}
+    .wrap{max-width:1100px;margin:auto;padding:18px}
+    .card{background:#1a1d21;border:1px solid #2b3138;border-radius:12px;padding:14px;margin-top:12px}
+    .muted{color:#9aa4b2}.tiny{font-size:12px;color:#97a1ae}a{color:#cbd5e1}
+    .h{font-size:28px;font-weight:700}
+  </style>
+</head>
+<body>
+<div class="wrap">
+  <div><a href="/invest-recommend">← 메인으로</a></div>
+  <div id="head" class="card">불러오는 중...</div>
+  <div id="company" class="card"></div>
+  <div id="plan" class="card"></div>
+  <div id="news" class="card"></div>
+  <div id="reports" class="card"></div>
+</div>
+<script>
+function fmt(v,d=2){return (v===null||v===undefined)?'-':Number(v).toLocaleString(undefined,{maximumFractionDigits:d});}
+function pct(v,d=2){if(v===null||v===undefined||Number.isNaN(Number(v)))return '-';const n=Number(v);return `${n>0?'+':''}${n.toLocaleString(undefined,{maximumFractionDigits:d})}%`;}
+function getSymbol(){const p=location.pathname.split('/'); return decodeURIComponent(p[p.length-1]||'').toUpperCase();}
 
-<b>2) 모델 점수 해부 (가중치 기반)</b><br>
-- 총점 공식: <code>0.35R + 0.25C + 0.15L + 0.10V + 0.15T</code><br>
-- R(리포트/기관): ${fmt(rc.score)} / C(뉴스군중): ${fmt(crowd.score)} / L(유동성): ${fmt(liq)} / V(리스크): ${fmt(risk.score)} / T(기술): ${fmt(t.score)}<br>
-- 점수 해석: 단일 지표 몰빵이 아니라, <b>컨센서스+차트+리스크</b>를 균형 반영한 다요인 스코어.<br><br>
+function favorableNews(r){
+  const hs=(r?.components?.crowd?.headlines||[]);
+  const pos=['상승','수주','호재','성장','흑자','계약','확대','record','surge','upgrade','beat','gain'];
+  const picked=hs.filter(h=>pos.some(k=>String(h).toLowerCase().includes(String(k).toLowerCase()))).slice(0,5);
+  return (picked.length?picked:hs.slice(0,5));
+}
 
-<b>3) 리포트/기관 합의 (R)</b><br>
-- 합의점수: ${fmt(rc.score)}점
-- 목표가 괴리: ${pct(rc.upsidePct)}
-- 추천지수/의견수: ${fmt(rc.recommendationMean)} / ${fmt(rc.analystOpinions,0)}
-- 해석: 목표가 괴리가 플러스이고 의견수가 충분하면, “숫자 기반 기대”가 존재한다고 판단.<br><br>
+function renderReports(r){
+  const arr=r?.components?.reportConsensus?.reportLinks||[];
+  if(!arr.length) return '<b>증권 리포트</b><br>- 리포트 정보가 없습니다.';
+  return `<b>증권 리포트</b><br>` + arr.map((x,i)=>
+    `${i+1}) ${x.date||'-'} · ${x.broker||'-'} · 목표가: <b>${fmt(x.targetPrice,0)}</b><br>`+
+    `&nbsp;&nbsp;&nbsp;${x.title||'-'}<br>`+
+    `&nbsp;&nbsp;&nbsp;<a href='${x.url}' target='_blank'>리포트 원문</a>`
+  ).join('<br>');
+}
 
-<b>4) 기술적 타이밍 (T)</b><br>
-- 기술점수: ${fmt(t.score)}점 (셋업: <b>${t.setup||'-'}</b>)
-- RSI(14): ${fmt(t.rsi14)} / MA20 이격: ${pct(t.distMa20Pct)} / 20일고점대비: ${pct(t.from20dHighPct)}
-- 해석: 추세 속 눌림인지, 과열 추격인지 구분해서 진입 품질을 평가.<br><br>
+(async()=>{
+  const sym=getSymbol();
+  const res=await fetch(`/api/symbol/${encodeURIComponent(sym)}/detail?t=${Date.now()}`,{cache:'no-store'});
+  if(!res.ok){
+    document.getElementById('head').innerHTML='종목을 찾을 수 없습니다. (메인에서 새로 조회 후 다시 열어주세요)';
+    return;
+  }
+  const j=await res.json();
+  const r=j.item;
+  const c=r.components||{};
+  const rc=c.reportConsensus||{};
+  const tech=c.technical||{};
+  const ci=c.companyInfo||{};
 
-<b>5) 모멘텀 (M, 참고)</b><br>
-- 1M: ${pct(m.m1Pct)} · 3M: ${pct(m.m3Pct)} · 6M: ${pct(m.m6Pct)}
-- 모멘텀 점수: ${fmt(m.score)}점
-- 해석: 단기/중기/반기 흐름의 일관성 체크. (참고 지표)<br><br>
+  document.getElementById('head').innerHTML=`
+    <div class='h'>${r.symbol} (${r.name})</div>
+    <div class='muted'>종합점수 ${fmt(r.score)} · 컨센서스 ${fmt(rc.score)} · 테마 ${fmt(c.theme?.score)} · 뉴스 ${fmt(c.crowd?.score)} · 기술 ${fmt(tech.score)}</div>
+    <div>목표주가 컨센서스: <b>${fmt(rc.targetMeanPrice,0)}</b> (${pct(rc.upsidePct)}) / 의견수: ${fmt(rc.analystOpinions,0)} / 소스: ${rc.source||'-'}</div>
+  `;
 
-<b>6) 리스크/유동성 (V/L)</b><br>
-- 유동성 점수: ${fmt(liq)}점
-- 변동성: ${pct(risk.volPct)} / 최대낙폭(MDD): ${pct(risk.maxDrawdownPct)} / 리스크점수: ${fmt(risk.score)}
-- 해석: 들어가고 나오는 비용/충격 + 하락 내성까지 포함한 현실성 검증.<br><br>
+  document.getElementById('company').innerHTML=`
+    <b>회사 기본 정보</b><br>
+    - 업종: ${ci.sector||'-'} / 산업: ${ci.industry||'-'}<br>
+    - 웹사이트: ${ci.website?`<a href='${ci.website}' target='_blank'>${ci.website}</a>`:'-'}<br>
+    - 사업 개요:<br><span class='tiny'>${ci.summary||'요약 정보 없음'}</span>
+  `;
 
-<b>7) 뉴스/군중 시그널 (C)</b><br>
-- 점수: ${fmt(crowd.score)} / 톤: ${fmt(crowd.tone,0)} / 헤드라인 수: ${fmt(crowd.headlineCount,0)}
-- 해석: 재료 과열인지, 악재 누적 구간인지 정성 리스크를 수치화.<br><br>
+  document.getElementById('plan').innerHTML=`
+    <b>운용 계획</b><br>
+    - 진입: ${fmt(r.plan?.entryZone?.[0])} ~ ${fmt(r.plan?.entryZone?.[1])}<br>
+    - 손절: ${fmt(r.plan?.stopLoss)} / 익절1: ${fmt(r.plan?.takeProfit1)} / 익절2: ${fmt(r.plan?.takeProfit2)}<br>
+    - 예상손실: ${pct(r.expectedLossPct)} / 예상수익(1차): ${pct(r.expectedReturnPct)}<br>
+    - 기술 국면: ${tech.setup||'-'} (cross: ${tech.crossState||'-'}, 이격도: ${pct(tech.distMa20Pct)})
+  `;
 
-<b>8) 실전 트레이드 해석</b><br>
-- 기대수익-예상손실(단순 엣지): <b>${edge}%p</b>
-- 핵심은 맞추기보다 <b>손익비 관리</b>. 손절 기준이 먼저, 익절은 뒤.
-`;}
-function scenarioTable(r){const cp=Number(r.currentPrice||0),tp1=Number(r.plan?.takeProfit1||0),sl=Number(r.plan?.stopLoss||0);const bull=((tp1/cp-1)*100)||0;const bear=((sl/cp-1)*100)||0;const base=(bull*0.55 + bear*0.45);return `
-<b>시나리오 플래닝 (예시)</b><br>
-- Bull: 추세 재가속 → 1차 목표 ${fmt(tp1)} (${pct(bull)})<br>
-- Base: 박스권 소화 후 재상승/횡보 → 기대 ${pct(base)} 근처<br>
-- Bear: 지지 이탈 → 손절 ${fmt(sl)} (${pct(bear)})<br>
-`;}
-function checklist(r){return `
-<b>체크리스트 (매수 전/보유 중)</b><br>
-1) 진입가가 계획 범위(${fmt(r.plan?.entryZone?.[0])}~${fmt(r.plan?.entryZone?.[1])}) 안에 있는가?<br>
-2) 장중 급등 추격은 아닌가? (체결 강도/거래대금 과열 확인)<br>
-3) 손절가(${fmt(r.plan?.stopLoss)})를 사전에 수용 가능한가?<br>
-4) 보유 중 무효화 조건 충족 여부를 매일 확인하는가?<br>
-5) 재료(뉴스/실적/가이던스) 변화 시 플랜을 즉시 업데이트 했는가?<br>
-`;}
-function easyExplain(r){const c=r.components||{};const t=c.technical||{};const rc=c.reportConsensus||{};const rr=Number(r.riskReward||0);let tone='중립';if(rr>=4&&Number(t.score||0)>=60)tone='공격적 매수 우위';else if(rr>=3)tone='매수 우위';else tone='관망/분할 접근';return `
-<b>왜 지금 진입 후보인가? (쉽게)</b><br>
-- 목표수익 대비 손실비율(RR)이 <b>${fmt(rr)}</b>로 유리한 편이고,<br>
-- 기술적 구조가 <b>${t.setup||'확인 필요'}</b> 구간이라 리스크 관리가 비교적 명확함.<br>
-- 기관/리포트 합의도 ${fmt(rc.score)}점으로 받쳐주고 있어 <b>${tone}</b> 판단.
-`;}
-function verdictBadge(r){const rr=Number(r.riskReward||0), s=Number(r.score||0), t=Number(r?.components?.technical?.score||0); if(rr>=4.5&&s>=72&&t>=60) return "🟢 강매수(공격)"; if(rr>=3.2&&s>=62) return "🟡 분할매수"; return "⚪ 관망";}
-function scenarioProb(r){const rr=Math.max(0,Number(r.riskReward||0)); let bull=Math.min(65, 30 + rr*6); let bear=Math.max(15, 35 - rr*3); let base=100-bull-bear; if(base<15){base=15; bull=100-base-bear;} return {bull:Math.round(bull), base:Math.round(base), bear:Math.round(bear)};}
-function summarizeNews(r){const hs=(r?.components?.crowd?.headlines||[]).slice(0,3); if(!hs.length) return "- 최근 헤드라인 데이터가 부족해 중립으로 처리.<br>- 뉴스 공백 구간에서는 가격/거래대금 신호를 우선 확인.<br>- 이벤트(실적/공시) 발생 시 즉시 재평가 필요."; return hs.map((h,i)=>`- [${i+1}] ${h}`).join('<br>');}
-function reportLinksHtml(r){const links=r?.components?.reportConsensus?.reportLinks||[]; if(!links.length) return "<b>한경 리포트 링크</b><br>- 노출 가능한 리포트 링크가 없습니다."; return `<b>한경 리포트 링크</b><br>`+links.map((x,i)=>`${i+1}) ${x.date||'-'} · ${x.broker||'-'} · <a href='${x.url}' target='_blank'>${x.title||'리포트 보기'}</a>`).join('<br>');}
-function renderBigCandles(d,el){const o=d.open.map(Number),h=d.high.map(Number),l=d.low.map(Number),c=d.close.map(Number),v=(d.volume||[]).map(Number);const m=o.length;if(!m){el.innerHTML='데이터 없음';return;}const sma=(arr,p)=>arr.map((_,i)=>i<p-1?null:arr.slice(i-p+1,i+1).reduce((a,b)=>a+b,0)/p);const ma20=sma(c,20),ma60=sma(c,60);const all=[...h,...l].filter(Number.isFinite);const w=940,hPx=340,pL=8,pR=52,pT=8,pB=14,volH=74,priceH=hPx-pT-pB-volH-8,plotW=w-pL-pR;const minRaw=Math.min(...all),maxRaw=Math.max(...all),pad=(maxRaw-minRaw)*0.06,min=minRaw-pad,max=maxRaw+pad,span=(max-min)||1;const y=v=>pT+(max-v)/span*priceH;const volTop=pT+priceH+8,maxVol=Math.max(...v.filter(Number.isFinite),1),slot=plotW/(m||1),bodyW=Math.max(2,Math.min(8,slot*0.62));const grid=[];for(let i=0;i<=4;i++){const gy=pT+(priceH/4)*i;grid.push(`<line x1='${pL}' y1='${gy}' x2='${w-pR}' y2='${gy}' stroke='#24304f'/>`);}const wick=[],body=[],vols=[];for(let i=0;i<m;i++){const cx=pL+slot*i+slot/2,oy=y(o[i]),cy=y(c[i]),hy=y(h[i]),ly=y(l[i]),up=c[i]>=o[i],color=up?'#22c55e':'#ef4444';wick.push(`<line x1='${cx}' y1='${hy}' x2='${cx}' y2='${ly}' stroke='${color}'/>`);body.push(`<rect x='${cx-bodyW/2}' y='${Math.min(oy,cy)}' width='${bodyW}' height='${Math.max(Math.abs(cy-oy),1.2)}' fill='${color}'/>`);const vv=Number.isFinite(v[i])?v[i]:0,vh=(vv/maxVol)*volH;vols.push(`<rect x='${cx-bodyW/2}' y='${volTop+(volH-vh)}' width='${bodyW}' height='${Math.max(vh,0.8)}' fill='${up?'#1f9d55':'#b91c1c'}' opacity='0.75'/>`);}const path=a=>a.map((x,i)=>Number.isFinite(x)?`${pL+slot*i+slot/2},${y(x)}`:'').filter(Boolean).join(' ');el.innerHTML=`<svg viewBox='0 0 ${w} ${hPx}' width='100%' height='340'><rect x='0' y='0' width='${w}' height='${hPx}' fill='#0f172a' rx='8'/>${grid.join('')}${wick.join('')}${body.join('')}<polyline fill='none' stroke='#f59e0b' stroke-width='1.4' points='${path(ma20)}'/><polyline fill='none' stroke='#60a5fa' stroke-width='1.4' points='${path(ma60)}'/><line x1='${pL}' y1='${volTop-1}' x2='${w-pR}' y2='${volTop-1}' stroke='#24304f'/>${vols.join('')}<text x='${w-pR+5}' y='${pT+10}' fill='#93a4c7' font-size='11'>${maxRaw.toLocaleString()}</text><text x='${w-pR+5}' y='${pT+priceH}' fill='#93a4c7' font-size='11'>${minRaw.toLocaleString()}</text><text x='${pL}' y='${hPx-2}' fill='#f59e0b' font-size='11'>MA20</text><text x='${pL+42}' y='${hPx-2}' fill='#60a5fa' font-size='11'>MA60</text></svg>`;}
-(async()=>{const sym=getSymbol();let r=null;try{const res=await fetch(`/api/symbol/${encodeURIComponent(sym)}/detail?t=${Date.now()}`,{cache:'no-store'});if(res.ok){const j=await res.json();r=j.item||null;}}catch(e){}if(!r){document.getElementById('head').innerHTML='종목을 찾을 수 없습니다. (먼저 메인에서 새로 조회 후 다시 열어주세요)';return;}const pr=scenarioProb(r);document.getElementById('head').innerHTML=`<div class='h'>${r.symbol} (${r.name})</div><div class='muted'>${verdictBadge(r)} · 종합점수 ${fmt(r.score)} / RR ${fmt(r.riskReward)} / 현재가 ${fmt(r.currentPrice)}</div>`;document.getElementById('quick').innerHTML=easyExplain(r)+`<br><b>시나리오 확률(주관)</b><br>- Bull ${pr.bull}% / Base ${pr.base}% / Bear ${pr.bear}%`;document.getElementById('plan').innerHTML=`<b>운용 플랜</b><br>진입: ${fmt(r.plan.entryZone[0])} ~ ${fmt(r.plan.entryZone[1])}<br>손절: ${fmt(r.plan.stopLoss)} / 익절1: ${fmt(r.plan.takeProfit1)} / 익절2: ${fmt(r.plan.takeProfit2)}<br>예상손실: ${pct(r.expectedLossPct)} / 예상수익(1차): ${pct(r.expectedReturnPct)} / 예상수익(2차): ${pct(r.expectedReturn2Pct)}<br>유효기간: ${r.plan.ttlTradingDays} 거래일<br>무효화 조건: ${r.plan.invalidationRule}`;document.getElementById('reasons').innerHTML=`<b>추천 근거 상세 설명</b><br><br>${longExplain(r)}<br>${scenarioTable(r)}<br>${checklist(r)}<br><b>뉴스 3줄 요약</b><br>${summarizeNews(r)}<br><br>${reportLinksHtml(r)}<br><br><a href='${r.links?.analysis||'#'}' target='_blank'>리포트 원문(Analysis)</a> · <a href='${r.links?.news||'#'}' target='_blank'>관련 뉴스</a>`;try{const ch=await (await fetch(`/api/chart/${encodeURIComponent(sym)}?period=6mo&interval=1d`)).json();if(ch.ok)renderBigCandles(ch,document.getElementById('chartArea'));else document.getElementById('chartArea').innerHTML='차트 로딩 실패';}catch{document.getElementById('chartArea').innerHTML='차트 로딩 실패';}})();</script></body></html>
+  const news=favorableNews(r);
+  document.getElementById('news').innerHTML=`
+    <b>최근 호재 뉴스</b><br>
+    ${news.length?news.map((x,i)=>`${i+1}) ${x}`).join('<br>'):'- 뉴스 데이터 없음'}
+  `;
+
+  document.getElementById('reports').innerHTML=renderReports(r);
+})();
+</script>
+</body>
+</html>

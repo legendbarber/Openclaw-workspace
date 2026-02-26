@@ -538,10 +538,29 @@ def _consensus_from_naver_or_hk(symbol: str, name: str | None = None) -> Dict:
 
             if m_idx:
                 rid = m_idx.group(1)
+                # 리포트별 목표가 보관(표 컬럼/본문/상세보강 순)
+                rpt_target = None
+                if isinstance(row_target, (int, float)):
+                    rpt_target = float(row_target)
+                elif m_tp:
+                    try:
+                        rpt_target = float(m_tp.group(1).replace(",", ""))
+                    except Exception:
+                        rpt_target = None
+                else:
+                    extra2 = _hankyung_view_fields(rid)
+                    x_tp2 = extra2.get("TARGET_STOCK_PRICES")
+                    try:
+                        if isinstance(x_tp2, (int, float, str)):
+                            rpt_target = float(str(x_tp2).replace(",", ""))
+                    except Exception:
+                        rpt_target = None
+
                 hk_reports.append({
                     "date": d.strftime("%Y-%m-%d"),
                     "title": title,
                     "broker": broker,
+                    "targetPrice": None if rpt_target is None else round(float(rpt_target), 2),
                     "url": f"https://consensus.hankyung.com/analysis/downpdf?report_idx={rid}",
                 })
 
@@ -861,11 +880,13 @@ def _apply_runtime_theme_scores(rows: List[Dict]) -> List[Dict]:
             })
             r["components"]["theme"] = th
 
-            # 테마점수를 종합점수에 반영 (요청: 테마 우선)
+            # 요청 비율 반영: 종목(5) : 테마(3) : 뉴스(1) : 기술(1)
             base = float(r.get("scoreBase", r.get("score", 50.0)))
+            news_s = float((r.get("components", {}).get("crowd", {}) or {}).get("score", 50.0))
+            tech_s = float((r.get("components", {}).get("technical", {}) or {}).get("score", 50.0))
             conf = float(r.get("confidence", 50.0))
-            final_score = 0.75 * base + 0.25 * th["score"]
-            final_score = 0.9 * final_score + 0.1 * conf
+            core = 0.50 * base + 0.30 * th["score"] + 0.10 * news_s + 0.10 * tech_s
+            final_score = 0.9 * core + 0.1 * conf
 
             # 밸류에이션 갭(목표가-현재가) 소폭 반영
             up = (r.get("components", {}).get("reportConsensus", {}) or {}).get("upsidePct")
@@ -1065,12 +1086,8 @@ def evaluate_asset(asset: Asset) -> Dict | None:
     risk = _risk_score(s)
     technical = _technical_score(s, target_price=report_consensus.get("targetMeanPrice"))
 
-    # 1차 기본점수(테마 제외): R/C/T
-    base_score = (
-        0.60 * report_consensus["score"] +
-        0.25 * crowd["score"] +
-        0.15 * technical["score"]
-    )
+    # 종목 자체 점수(요청): 리서치/컨센서스 점수를 종목 점수로 사용
+    base_score = float(report_consensus["score"])
 
     # 데이터 품질 기반 신뢰도
     r_conf = float(report_consensus.get("confidence", 50.0) or 0.0)
@@ -1099,6 +1116,18 @@ def evaluate_asset(asset: Asset) -> Dict | None:
     expected_return2_pct = (tp2 / cur - 1) * 100
     rr_ratio = expected_return1_pct / abs(expected_loss_pct) if expected_loss_pct < 0 else 0.0
 
+    company_info = {"summary": None, "sector": None, "industry": None, "website": None}
+    try:
+        info = yf.Ticker(asset.symbol).info or {}
+        company_info = {
+            "summary": (info.get("longBusinessSummary") or "")[:700] or None,
+            "sector": info.get("sector"),
+            "industry": info.get("industry"),
+            "website": info.get("website"),
+        }
+    except Exception:
+        pass
+
     return {
         "symbol": asset.symbol,
         "name": asset.name,
@@ -1118,6 +1147,7 @@ def evaluate_asset(asset: Asset) -> Dict | None:
             "crowd": crowd,
             "liquidityScore": liquidity,
             "risk": risk,
+            "companyInfo": company_info,
         },
         "plan": {
             "entryZone": [round(cur * 0.99, 2), round(cur * 1.01, 2)],
@@ -1224,7 +1254,8 @@ def build_report(market: str = "all", candidate_limit: int | None = None, progre
         "model": f"{market_label} Single-Stock Dual Ranking v5 (No Momentum + Technical)",
         "market": mk,
         "candidateLimit": total_assets,
-        "methodology": "S=RuntimeThemeAdjusted: base(R/C/T; T=overheat/adjustment regime)+NaverTheme(TH)+small valuation-gap adjustment(upside capped)",
+        "methodology": "S=0.9*(0.50Stock+0.30Theme+0.10News+0.10Technical)+0.1Conf; Technical=direction/cross/distance, KR theme=Naver theme",
+
         "topPick": top,
         "rankings": rows,
         "riskAdjustedRankings": risk_adjusted,
