@@ -402,11 +402,12 @@ def api_theme_now_kr_refresh():
 def api_chart_symbol(symbol: str):
     period = request.args.get('period', default='6mo', type=str) or '6mo'
     interval = request.args.get('interval', default='1d', type=str) or '1d'
+    force_refresh = str(request.args.get('refresh', '0')).lower() in {'1', 'true', 'yes', 'y'}
     key = f"{symbol}|{period}|{interval}"
     now = time.time()
 
     cached = _CHART_CACHE.get(key)
-    if cached and (now - cached.get("ts", 0) <= _CHART_TTL_SEC):
+    if (not force_refresh) and cached and (now - cached.get("ts", 0) <= _CHART_TTL_SEC):
         return jsonify(cached["data"])
 
     try:
