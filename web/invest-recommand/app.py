@@ -8,6 +8,7 @@ from engine import (
     get_current_change_vs_snapshot,
     refresh_universe_top300,
     get_universe_stats,
+    clear_runtime_caches,
 )
 from theme_leader import (
     build_theme_leader_report,
@@ -86,6 +87,7 @@ def _run_report_job(key: str, market: str, candidate_limit: int, task_id: str):
             _REPORT_PROGRESS[key] = st
 
     try:
+        clear_runtime_caches()
         data = build_report(market=market, candidate_limit=candidate_limit, progress_cb=_progress_cb)
         with _REPORT_LOCK:
             _REPORT_CACHE[key] = {"ts": time.time(), "data": data}

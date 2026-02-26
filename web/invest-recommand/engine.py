@@ -183,6 +183,12 @@ def refresh_universe_top300() -> Dict:
     return {"ok": True, "us": us_n, "kr": kr_n, "loaded": loaded, "updatedAt": datetime.now(UTC).isoformat().replace("+00:00", "Z")}
 
 
+def clear_runtime_caches() -> None:
+    _CONS_CACHE.clear()
+    _HK_REPORT_CACHE.clear()
+    _THEME_META_CACHE.clear()
+
+
 def get_universe_stats() -> Dict:
     base = Path(__file__).resolve().parent
     us_path = base / "universe_us_top300.json"
