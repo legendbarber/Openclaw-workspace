@@ -226,11 +226,11 @@ async function renderMiniChart(symbol, elId, force=false){
       return;
     }
 
-    const o = d.open.slice(-80).map(Number);
-    const hArr = d.high.slice(-80).map(Number);
-    const lArr = d.low.slice(-80).map(Number);
-    const c = d.close.slice(-80).map(Number);
-    const vArr = (d.volume || []).slice(-80).map(Number);
+    const o = d.open.slice(-180).map(Number);
+    const hArr = d.high.slice(-180).map(Number);
+    const lArr = d.low.slice(-180).map(Number);
+    const c = d.close.slice(-180).map(Number);
+    const vArr = (d.volume || []).slice(-180).map(Number);
     const m = o.length;
 
     const all = [...hArr, ...lArr].filter(v=>Number.isFinite(v));
@@ -247,6 +247,7 @@ async function renderMiniChart(symbol, elId, force=false){
     });
     const ma20 = sma(c,20);
     const ma60 = sma(c,60);
+    const ma120 = sma(c,120);
 
     const w = 340, hPx = 180;
     const pL = 8, pR = 46, pT = 10, pB = 16;
@@ -309,6 +310,7 @@ async function renderMiniChart(symbol, elId, force=false){
 
     const ma20Path = toPath(ma20);
     const ma60Path = toPath(ma60);
+    const ma120Path = toPath(ma120);
 
     const maxTxt = maxRaw.toLocaleString(undefined,{maximumFractionDigits:0});
     const minTxt = minRaw.toLocaleString(undefined,{maximumFractionDigits:0});
@@ -321,12 +323,14 @@ async function renderMiniChart(symbol, elId, force=false){
         ${body.join('')}
         ${ma20Path ? `<polyline fill='none' stroke='#f59e0b' stroke-width='1.4' points='${ma20Path}'/>` : ''}
         ${ma60Path ? `<polyline fill='none' stroke='#60a5fa' stroke-width='1.4' points='${ma60Path}'/>` : ''}
+        ${ma120Path ? `<polyline fill='none' stroke='#a78bfa' stroke-width='1.4' points='${ma120Path}'/>` : ''}
         <line x1='${pL}' y1='${volTop-1}' x2='${w-pR}' y2='${volTop-1}' stroke='#24304f' stroke-width='1'/>
         ${vols.join('')}
         <text x='${w-pR+4}' y='${(pT+10).toFixed(1)}' fill='#93a4c7' font-size='10'>${maxTxt}</text>
         <text x='${w-pR+4}' y='${(pT+priceH).toFixed(1)}' fill='#93a4c7' font-size='10'>${minTxt}</text>
         <text x='${pL}' y='${(hPx-4).toFixed(1)}' fill='#f59e0b' font-size='10'>MA20</text>
         <text x='${(pL+38).toFixed(1)}' y='${(hPx-4).toFixed(1)}' fill='#60a5fa' font-size='10'>MA60</text>
+        <text x='${(pL+76).toFixed(1)}' y='${(hPx-4).toFixed(1)}' fill='#a78bfa' font-size='10'>MA120</text>
         <text x='${(w-pR-28).toFixed(1)}' y='${(volTop+10).toFixed(1)}' fill='#93a4c7' font-size='9'>VOL</text>
       </svg>
     `;
