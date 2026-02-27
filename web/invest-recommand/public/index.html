@@ -213,7 +213,7 @@ async function renderMiniChart(symbol, elId, force=false){
   if(!el) return;
 
   try{
-    const res = await fetch(`/api/chart/${encodeURIComponent(symbol)}?period=3mo&interval=1d&refresh=${force?1:0}&t=${Date.now()}`);
+    const res = await fetch(`/api/chart/${encodeURIComponent(symbol)}?period=1y&interval=1d&refresh=${force?1:0}&t=${Date.now()}`);
     const d = await res.json();
     if(!res.ok || !d.ok || !d.open?.length || !d.high?.length || !d.low?.length || !d.close?.length){
       el.innerHTML = `<div class='tiny'>차트 로딩 실패 · <a href='https://finance.yahoo.com/quote/${symbol}' target='_blank'>Yahoo 차트 보기</a></div>`;
