@@ -619,7 +619,6 @@ def _consensus_from_naver_or_hk(symbol: str, name: str | None = None) -> Dict:
             cur = None
 
         target = None
-        recency_bonus = 0.0
         if targets and target_ages:
             n_pair = min(len(targets), len(target_ages))
             t = np.array(targets[:n_pair], dtype=float)
@@ -630,10 +629,7 @@ def _consensus_from_naver_or_hk(symbol: str, name: str | None = None) -> Dict:
                 keep = idx[1:-1]
                 t = t[keep]
                 w = w[keep]
-                ages = ages[keep]
             target = float(np.average(t, weights=w)) if (len(w) == len(t) and w.sum() > 0) else float(np.mean(t))
-            avg_age = float(np.average(ages, weights=w)) if (len(w) == len(ages) and w.sum() > 0) else float(np.mean(ages))
-            recency_bonus = float(np.clip((31 - avg_age) / 31 * 8, 0, 8))
 
         # 한경 목록에서 목표가 추출이 안 되는 종목은 yfinance 목표가를 보조값으로 사용
         target_fallback = False
@@ -680,7 +676,6 @@ def _consensus_from_naver_or_hk(symbol: str, name: str | None = None) -> Dict:
         dist_raw = 0.7 * (buy_ratio_w - sell_ratio_w) + 0.3 * (buy_ratio - sell_ratio)
         score += float(np.clip(dist_raw * 25, -15, 25))
         score += float(np.clip(sample_n * 3.0, 0, 20))
-        score += recency_bonus
 
         return {
             "targetMeanPrice": None if target is None else round(target, 2),
@@ -689,7 +684,7 @@ def _consensus_from_naver_or_hk(symbol: str, name: str | None = None) -> Dict:
             "recommendationKey": None,
             "analystOpinions": sample_n,
             "opinionDistribution": b,
-            "freshnessBonus": round(float(recency_bonus), 2),
+            "freshnessBonus": 0.0,
             "reportLinks": hk_reports,
             "source": "hankyung_consensus+yf_target_fallback" if target_fallback else "hankyung_consensus",
             "confidence": round(float(np.clip((sample_n / 6) * 100, 0, 100)), 2),
