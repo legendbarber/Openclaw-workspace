@@ -363,6 +363,11 @@ def invest_ui_candidates_page(name: str):
     return send_from_directory(f"{app.static_folder}/ui-candidates", fname)
 
 
+@app.get('/invest-recommend/sw-notify.js')
+def invest_sw_notify_js():
+    return send_from_directory(app.static_folder, 'sw-notify.js')
+
+
 @app.get('/theme-leaders')
 def theme_leaders_page():
     return send_from_directory(app.static_folder, 'theme-leaders.html')
