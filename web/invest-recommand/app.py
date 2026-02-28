@@ -1,7 +1,14 @@
+import json
+import os
+from pathlib import Path
 from flask import Flask, jsonify, send_from_directory, redirect, Response, request
 from engine import (
     build_report,
     save_daily_snapshot,
+    save_archive_entry,
+    list_archived_picks,
+    get_archived_pick,
+    delete_archived_pick,
     list_snapshots,
     get_snapshot,
     list_snapshot_dates_by_month,
@@ -17,10 +24,11 @@ from theme_leader import (
     list_theme_leader_snapshots,
 )
 from theme_logic_kr import save_kr_theme_report
+from pywebpush import WebPushException, webpush
 import threading
 import time
 import uuid
-from datetime import datetime
+from datetime import datetime, UTC
 from zoneinfo import ZoneInfo
 import urllib.request
 import urllib.parse
@@ -38,6 +46,116 @@ _REPORT_PROGRESS = {}
 _REPORT_LOCK = threading.Lock()
 _CHART_CACHE = {}
 _CHART_TTL_SEC = 300
+
+VAPID_PUBLIC_KEY = "BPl-6O7KJvhPwqLM_P2XVpUgOJ9ojjYMaaHtBPUlz1m--u52HTchETpBES5iZG1zhizz_MLKbOI8Xq53rq-cQ0o"
+VAPID_PRIVATE_KEY = "IOFjthCc8giC_JQRFiDNVh9C6H0-KEGEHbTiHf__6mQ"
+_PUSH_SUBSCRIPTIONS_FILE = os.path.join(os.path.dirname(__file__), "push_subscriptions.json")
+_PUSH_SUBSCRIPTIONS_LOCK = threading.Lock()
+
+
+def _load_push_subscriptions():
+    if not os.path.exists(_PUSH_SUBSCRIPTIONS_FILE):
+        return []
+    try:
+        with open(_PUSH_SUBSCRIPTIONS_FILE, "r", encoding="utf-8") as fh:
+            data = json.load(fh)
+            if isinstance(data, list):
+                return data
+    except Exception:
+        pass
+    return []
+
+
+_PUSH_SUBSCRIPTIONS = _load_push_subscriptions()
+
+
+def _save_push_subscriptions():
+    try:
+        dir_path = os.path.dirname(_PUSH_SUBSCRIPTIONS_FILE)
+        if dir_path:
+            os.makedirs(dir_path, exist_ok=True)
+        with open(_PUSH_SUBSCRIPTIONS_FILE, "w", encoding="utf-8") as fh:
+            json.dump(_PUSH_SUBSCRIPTIONS, fh, ensure_ascii=False, indent=2)
+    except Exception:
+        pass
+
+
+def register_push_subscription(sub: dict) -> bool:
+    if not sub or not isinstance(sub, dict):
+        return False
+    endpoint = sub.get("endpoint")
+    if not endpoint:
+        return False
+    with _PUSH_SUBSCRIPTIONS_LOCK:
+        for item in _PUSH_SUBSCRIPTIONS:
+            if item.get("endpoint") == endpoint:
+                item.clear()
+                item.update(sub)
+                _save_push_subscriptions()
+                return True
+        _PUSH_SUBSCRIPTIONS.append(sub)
+        _save_push_subscriptions()
+    return True
+
+
+def _build_push_payload(report: dict) -> dict | None:
+    if not report:
+        return None
+    top = report.get("topPick")
+    if not top:
+        return None
+    symbol = str(top.get("symbol") or "").upper() or "투자상품"
+    name = top.get("name") or ""
+    score = top.get("score")
+    expected = top.get("expectedReturnPct")
+    score_txt = f"{score:.2f}" if isinstance(score, (int, float)) else "-"
+    expected_txt = f"{expected:.2f}%" if isinstance(expected, (int, float)) else "-"
+    market = report.get("market") or "all"
+    limit = report.get("candidateLimit") or 300
+    body = f"{symbol} ({name}) · 점수 {score_txt} · 예상수익 {expected_txt}"
+    return {
+        "title": "추천 분석 완료",
+        "body": body,
+        "icon": "/invest-recommend/favicon.ico",
+        "tag": "invest-recommend-ready",
+        "data": {
+            "symbol": symbol,
+            "market": market,
+            "limit": limit,
+            "url": f"/invest-recommend?market={market}&limit={limit}",
+        },
+    }
+
+
+def _notify_push_subscribers(payload: dict) -> None:
+    if not payload:
+        return
+    subs = []
+    with _PUSH_SUBSCRIPTIONS_LOCK:
+        subs = list(_PUSH_SUBSCRIPTIONS)
+    if not subs:
+        return
+    failed_endpoints = []
+    for sub in subs:
+        try:
+            webpush(
+                subscription_info=sub,
+                data=json.dumps(payload, ensure_ascii=False),
+                vapid_private_key=VAPID_PRIVATE_KEY,
+                vapid_claims={"sub": "mailto:alert@legendbarber.tailcaaac5.ts.net"},
+            )
+        except WebPushException as exc:
+            if hasattr(exc, "response") and exc.response and exc.response.status_code in {404, 410}:
+                failed_endpoints.append(sub.get("endpoint"))
+        except Exception:
+            pass
+    if not failed_endpoints:
+        return
+    with _PUSH_SUBSCRIPTIONS_LOCK:
+        before = len(_PUSH_SUBSCRIPTIONS)
+        _PUSH_SUBSCRIPTIONS[:] = [s for s in _PUSH_SUBSCRIPTIONS if s.get("endpoint") not in failed_endpoints]
+        if len(_PUSH_SUBSCRIPTIONS) != before:
+            _save_push_subscriptions()
 
 
 def _normalize_candidate_limit(v) -> int:
@@ -100,6 +218,9 @@ def _run_report_job(key: str, market: str, candidate_limit: int, task_id: str):
                 "error": None,
             })
             _REPORT_PROGRESS[key] = st
+        payload = _build_push_payload(data)
+        if payload:
+            _notify_push_subscribers(payload)
     except Exception as e:
         with _REPORT_LOCK:
             st = _REPORT_PROGRESS.get(key, {})
@@ -172,6 +293,43 @@ def api_report_progress():
     if not st:
         return jsonify({"status": "idle", "market": market, "limit": candidate_limit})
     return jsonify({"status": st.get("status", "idle"), "market": market, "limit": candidate_limit, "progress": st})
+
+
+@app.get('/api/archive')
+def api_archive_list():
+    return jsonify({"items": list_archived_picks()})
+
+
+@app.get('/api/archive/<symbol>')
+def api_archive_detail(symbol: str):
+    if not symbol:
+        return jsonify({"ok": False, "error": "invalid_symbol"}), 400
+    item = get_archived_pick(symbol)
+    if not item:
+        return jsonify({"ok": False, "error": "not_found"}), 404
+    return jsonify({"ok": True, "item": item})
+
+
+@app.delete('/api/archive/<symbol>')
+def api_archive_delete(symbol: str):
+    if not symbol:
+        return jsonify({"ok": False, "error": "invalid_symbol"}), 400
+    ok = delete_archived_pick(symbol)
+    if not ok:
+        return jsonify({"ok": False, "error": "not_found"}), 404
+    return jsonify({"ok": True, "symbol": str(symbol).upper().strip()})
+
+
+@app.post('/api/notifications/subscribe')
+def api_notifications_subscribe():
+    payload = request.get_json(silent=True)
+    if not payload:
+        return jsonify({"ok": False, "error": "invalid_payload"}), 400
+    sub = payload.get("subscription")
+    if not isinstance(sub, dict) or not sub.get("endpoint"):
+        return jsonify({"ok": False, "error": "invalid_subscription"}), 400
+    register_push_subscription(sub)
+    return jsonify({"ok": True, "publicKey": VAPID_PUBLIC_KEY})
 
 
 @app.get('/api/universe/stats')
@@ -327,6 +485,11 @@ def invest_recommend_page():
     return send_from_directory(app.static_folder, 'index.html')
 
 
+@app.get('/invest-recommend/archive')
+def invest_archive_page():
+    return send_from_directory(app.static_folder, 'archive.html')
+
+
 @app.get('/invest-recommend-us')
 def invest_recommend_us_page():
     return redirect('/invest-recommend?market=us', code=302)
@@ -403,40 +566,34 @@ def api_theme_now_kr_refresh():
         return jsonify({"ok": False, "message": str(e)}), 500
 
 
-@app.get('/api/chart/<symbol>')
-def api_chart_symbol(symbol: str):
-    period = request.args.get('period', default='6mo', type=str) or '6mo'
-    interval = request.args.get('interval', default='1d', type=str) or '1d'
-    force_refresh = str(request.args.get('refresh', '0')).lower() in {'1', 'true', 'yes', 'y'}
+def _fetch_chart_data(symbol: str, period: str = "6mo", interval: str = "1d", force_refresh: bool = False) -> tuple[dict, int]:
     key = f"{symbol}|{period}|{interval}"
     now = time.time()
-
     cached = _CHART_CACHE.get(key)
     if (not force_refresh) and cached and (now - cached.get("ts", 0) <= _CHART_TTL_SEC):
-        return jsonify(cached["data"])
+        return cached["data"], 200
 
     try:
         hist = yf.Ticker(symbol).history(period=period, interval=interval, auto_adjust=True)
         if hist is None or hist.empty:
-            # fallback path (sometimes history intermittently fails)
             hist = yf.download(tickers=symbol, period=period, interval=interval, auto_adjust=True, progress=False, threads=False)
             if hist is None or hist.empty:
-                return jsonify({"ok": False, "message": "no_data", "symbol": symbol}), 404
+                return {"ok": False, "message": "no_data", "symbol": symbol}, 404
             if 'Close' not in hist:
                 if hasattr(hist, 'columns') and getattr(hist.columns, 'nlevels', 1) > 1 and symbol in hist.columns.get_level_values(0):
                     hist = hist[symbol]
 
         if 'Close' not in hist:
-            return jsonify({"ok": False, "message": "close_not_found", "symbol": symbol}), 404
+            return {"ok": False, "message": "close_not_found", "symbol": symbol}, 404
 
         for col in ['Open', 'High', 'Low', 'Close']:
             if col not in hist:
-                return jsonify({"ok": False, "message": f"{col.lower()}_not_found", "symbol": symbol}), 404
+                return {"ok": False, "message": f"{col.lower()}_not_found", "symbol": symbol}, 404
 
         cols = ['Open', 'High', 'Low', 'Close'] + (['Volume'] if 'Volume' in hist else [])
         ohlcv = hist[cols].dropna(subset=['Open', 'High', 'Low', 'Close'])
         if ohlcv.empty:
-            return jsonify({"ok": False, "message": "no_ohlc", "symbol": symbol}), 404
+            return {"ok": False, "message": "no_ohlc", "symbol": symbol}, 404
 
         labels = [idx.strftime('%Y-%m-%d') for idx in ohlcv.index]
         open_ = [round(float(v), 4) for v in ohlcv['Open'].tolist()]
@@ -458,9 +615,101 @@ def api_chart_symbol(symbol: str):
             "volume": volume,
         }
         _CHART_CACHE[key] = {"ts": now, "data": data}
-        return jsonify(data)
+        return data, 200
     except Exception as e:
-        return jsonify({"ok": False, "message": str(e), "symbol": symbol}), 500
+        return {"ok": False, "message": str(e), "symbol": symbol}, 500
+
+
+@app.get('/api/chart/<symbol>')
+def api_chart_symbol(symbol: str):
+    period = request.args.get('period', default='6mo', type=str) or '6mo'
+    interval = request.args.get('interval', default='1d', type=str) or '1d'
+    force_refresh = str(request.args.get('refresh', '0')).lower() in {'1', 'true', 'yes', 'y'}
+    data, status = _fetch_chart_data(symbol, period, interval, force_refresh)
+    return jsonify(data), status
+
+
+@app.post('/api/archive')
+def api_archive_save():
+    payload = request.get_json(silent=True) or {}
+    symbol = str(payload.get('symbol') or '').upper().strip()
+    if not symbol:
+        return jsonify({'ok': False, 'error': 'invalid_symbol'}), 400
+    market = (str(payload.get('market') or 'all') or 'all').lower()
+    if market not in {'all', 'kr', 'us'}:
+        market = 'all'
+    candidate_limit = _normalize_candidate_limit(payload.get('limit', 300))
+    key = _report_key(market, candidate_limit)
+    cached = _REPORT_CACHE.get(key)
+    if not cached or not cached.get('data'):
+        return jsonify({'ok': False, 'error': 'report_not_ready'}), 404
+    report = cached['data']
+    item = None
+    if report.get('topPick') and str(report['topPick'].get('symbol') or '').upper() == symbol:
+        item = report['topPick']
+    else:
+        for r in report.get('rankings') or []:
+            if str(r.get('symbol') or '').upper() == symbol:
+                item = r
+                break
+    if not item:
+        return jsonify({'ok': False, 'error': 'symbol_not_in_report'}), 404
+    entry = {
+        'symbol': symbol,
+        'name': item.get('name'),
+        'category': item.get('category'),
+        'score': item.get('score'),
+        'expectedReturnPct': item.get('expectedReturnPct'),
+        'riskReward': item.get('riskReward'),
+        'currentPrice': item.get('currentPrice'),
+        'generatedAt': report.get('generatedAt'),
+        'market': report.get('market') or market,
+        'candidateLimit': report.get('candidateLimit') or candidate_limit,
+        'methodology': report.get('methodology'),
+        'plan': item.get('plan') or {},
+        'components': item.get('components') or {},
+        'links': item.get('links') or {},
+    }
+    chart_period = str(payload.get('chartPeriod') or '6mo')
+    chart_interval = str(payload.get('chartInterval') or '1d')
+    chart, chart_status = _fetch_chart_data(symbol, chart_period, chart_interval, True)
+    entry['chart'] = chart
+    entry['chartPeriod'] = chart_period
+    entry['chartInterval'] = chart_interval
+    entry['chartFetchedAt'] = datetime.now(UTC).isoformat().replace('+00:00', 'Z')
+    save_archive_entry(entry)
+    return jsonify({'ok': True, 'item': entry, 'chartStatus': chart_status})
+
+
+@app.get('/api/archive/<symbol>/chart')
+def api_archive_chart(symbol: str):
+    item = get_archived_pick(symbol)
+    if not item:
+        return jsonify({'ok': False, 'error': 'not_found'}), 404
+    return jsonify({
+        'ok': True,
+        'chart': item.get('chart'),
+        'chartPeriod': item.get('chartPeriod'),
+        'chartInterval': item.get('chartInterval'),
+        'chartFetchedAt': item.get('chartFetchedAt'),
+    })
+
+
+@app.post('/api/archive/<symbol>/chart/refresh')
+def api_archive_chart_refresh(symbol: str):
+    item = get_archived_pick(symbol)
+    if not item:
+        return jsonify({'ok': False, 'error': 'not_found'}), 404
+    period = request.args.get('period') or item.get('chartPeriod') or '6mo'
+    interval = request.args.get('interval') or item.get('chartInterval') or '1d'
+    chart, status = _fetch_chart_data(symbol, period, interval, True)
+    updated = item.copy()
+    updated['chart'] = chart
+    updated['chartPeriod'] = period
+    updated['chartInterval'] = interval
+    updated['chartFetchedAt'] = datetime.now(UTC).isoformat().replace('+00:00', 'Z')
+    save_archive_entry(updated)
+    return jsonify({'ok': chart.get('ok', False), 'chart': chart, 'chartPeriod': period, 'chartInterval': interval}), status
 
 
 # invest-recommend 하위 캘린더 경로

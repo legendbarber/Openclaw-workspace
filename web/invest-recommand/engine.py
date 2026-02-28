@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import re
+import threading
 import time
 import urllib.parse
 import urllib.request
@@ -78,6 +79,44 @@ def _load_universe_from_files() -> List[Asset]:
 
 
 UNIVERSE = _load_universe_from_files()
+
+ARCHIVE_PATH = Path(__file__).resolve().parent / "archive_top_picks.json"
+_ARCHIVE_LOCK = threading.Lock()
+
+
+def _load_archive() -> Dict[str, Dict]:
+    if not ARCHIVE_PATH.exists():
+        return {}
+    try:
+        data = json.loads(ARCHIVE_PATH.read_text(encoding="utf-8"))
+        if isinstance(data, dict):
+            return data
+    except Exception:
+        pass
+    return {}
+
+
+def _save_archive(data: Dict[str, Dict]) -> None:
+    try:
+        with _ARCHIVE_LOCK:
+            ARCHIVE_PATH.parent.mkdir(parents=True, exist_ok=True)
+            ARCHIVE_PATH.write_text(json.dumps(data, ensure_ascii=False, indent=2), encoding="utf-8")
+    except Exception:
+        pass
+
+
+def save_archive_entry(entry: Dict) -> bool:
+    symbol = str(entry.get("symbol") or "").upper().strip()
+    if not symbol:
+        return False
+    archived = entry.copy()
+    archived["symbol"] = symbol
+    archive = _load_archive()
+    existing = archive.get(symbol, {})
+    merged = {**existing, **archived}
+    archive[symbol] = merged
+    _save_archive(archive)
+    return True
 
 
 def reload_universe() -> Dict:
@@ -1286,6 +1325,47 @@ def _append_log(report: Dict):
     state.append(item)
     state = state[-200:]
     STATE_PATH.write_text(json.dumps(state, ensure_ascii=False, indent=2), encoding="utf-8")
+    top = report.get("topPick") or {}
+    if top:
+        entry = {
+            "symbol": top.get("symbol"),
+            "name": top.get("name"),
+            "score": top.get("score"),
+            "expectedReturnPct": top.get("expectedReturnPct"),
+            "riskReward": top.get("riskReward"),
+            "generatedAt": report.get("generatedAt"),
+            "market": report.get("market"),
+            "candidateLimit": report.get("candidateLimit"),
+            "methodology": report.get("methodology"),
+            "plan": top.get("plan"),
+            "components": top.get("components"),
+        }
+        save_archive_entry(entry)
+
+
+def list_archived_picks() -> List[Dict]:
+    archive = _load_archive()
+    items = list(archive.values())
+    items.sort(key=lambda x: x.get("generatedAt") or "", reverse=True)
+    return items
+
+
+def get_archived_pick(symbol: str) -> Dict | None:
+    if not symbol:
+        return None
+    return _load_archive().get(symbol.upper().strip())
+
+
+def delete_archived_pick(symbol: str) -> bool:
+    key = str(symbol or "").upper().strip()
+    if not key:
+        return False
+    archive = _load_archive()
+    if key not in archive:
+        return False
+    del archive[key]
+    _save_archive(archive)
+    return True
 
 
 def save_daily_snapshot(force: bool = False) -> Dict:
