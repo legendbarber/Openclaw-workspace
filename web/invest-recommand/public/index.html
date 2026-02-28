@@ -71,6 +71,7 @@
 let __chartForceNext = false;
 let __notifyOnNextResult = false;
 let __lastNotifiedSnapshot = '';
+let __swReg = null;
 function fmt(v,d=2){return (v===null||v===undefined)?'-':Number(v).toLocaleString(undefined,{maximumFractionDigits:d});}
 function getMarket(){
   const m = new URLSearchParams(location.search).get('market');
@@ -134,6 +135,36 @@ async function ensureNotifyPermission(){
   }
 }
 
+async function ensureServiceWorker(){
+  if(!('serviceWorker' in navigator)) return null;
+  if(__swReg) return __swReg;
+  try{
+    __swReg = await navigator.serviceWorker.register('/invest-recommend/sw-notify.js', { scope: '/invest-recommend/' });
+    return __swReg;
+  }catch(_){
+    return null;
+  }
+}
+
+async function pushSystemNotification(title, body){
+  if(!('Notification' in window) || Notification.permission !== 'granted') return;
+  const reg = await ensureServiceWorker();
+  if(reg && reg.showNotification){
+    try{
+      await reg.showNotification(title, {
+        body,
+        tag:'invest-recommend-ready',
+        renotify:true,
+        icon:'/invest-recommend/favicon.ico'
+      });
+      return;
+    }catch(_){/* fallback below */}
+  }
+  try{
+    new Notification(title, { body, tag:'invest-recommend-ready', renotify:true });
+  }catch(_){/* noop */}
+}
+
 function notifyRecommendationReady(d, x){
   if(!x) return;
   const snapshotKey = `${d.generatedAt || ''}|${x.symbol || ''}|${x.score || ''}`;
@@ -141,12 +172,7 @@ function notifyRecommendationReady(d, x){
   __lastNotifiedSnapshot = snapshotKey;
 
   const body = `${x.symbol} (${x.name}) · 점수 ${fmt(x.score)} · 예상수익 ${fmtPct(x.expectedReturnPct)}`;
-
-  if('Notification' in window && Notification.permission === 'granted'){
-    try{
-      new Notification('추천 분석 완료', { body, tag:'invest-recommend-ready', renotify:true });
-    }catch(_){/* noop */}
-  }
+  pushSystemNotification('추천 분석 완료', body);
 
   try{
     if(navigator.vibrate) navigator.vibrate([120, 60, 120]);
@@ -608,6 +634,7 @@ async function loadData(){
 
 setMarketHeader();
 loadLimitPref();
+ensureServiceWorker();
 loadData();
 </script>
 </body>
