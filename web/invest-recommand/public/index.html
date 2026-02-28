@@ -31,6 +31,9 @@
     .chart-wrapper{position:relative}
     .chart-tooltip{position:absolute;top:0;left:0;padding:4px 10px;background:rgba(15,23,42,0.95);border:1px solid #475569;border-radius:8px;font-size:11.5px;color:#f8fafc;pointer-events:none;white-space:nowrap;box-shadow:0 8px 20px rgba(0,0,0,0.45);display:none;z-index:2;}
     .chart-hit{pointer-events:all;touch-action:none;}
+    .score-grid{display:grid;grid-template-columns:repeat(3,minmax(170px,1fr));gap:10px;margin-top:10px}
+    .score-cell{background:#111827;border:1px solid #374151;border-radius:10px;padding:8px}
+    .score-cell input[type='number']{width:80px;background:#0b1220;color:#fff;border:1px solid #475569;border-radius:6px;padding:4px 6px}
   </style>
 </head>
 <body>
@@ -54,6 +57,28 @@
         <button onclick="refreshChartsOnly()">차트만 최신화</button>
         <button onclick="updateUniverse()">시가총액 업데이트</button>
         <button onclick="location.href='/invest-recommend/archive'">추천 아카이브</button>
+      </div>
+    </div>
+
+    <div class="card">
+      <b>점수식 설정</b>
+      <div class="tiny">기본: 종목점수:테마점수 = 6:4 (필요 시 포함 항목/가중치 직접 조정)</div>
+      <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-top:8px">
+        <label class="tiny">프리셋</label>
+        <select id="scorePreset" style="background:#374151;color:#fff;border:1px solid #4b5563;border-radius:8px;padding:6px 8px">
+          <option value="default_6_4">기본 6:4 (종목/테마)</option>
+          <option value="balanced">밸런스 5:3:1:1</option>
+          <option value="theme_focus">테마중심 4:5:0.5:0.5</option>
+        </select>
+        <button onclick="applyPreset()">프리셋 적용</button>
+      </div>
+      <div class="score-grid">
+        <div class="score-cell"><label><input type="checkbox" id="useStock" checked> 종목점수</label><br><input id="wStock" type="number" step="0.05" min="0" value="0.6"></div>
+        <div class="score-cell"><label><input type="checkbox" id="useTheme" checked> 테마점수</label><br><input id="wTheme" type="number" step="0.05" min="0" value="0.4"></div>
+        <div class="score-cell"><label><input type="checkbox" id="useNews"> 뉴스점수</label><br><input id="wNews" type="number" step="0.05" min="0" value="0.0"></div>
+        <div class="score-cell"><label><input type="checkbox" id="useTechnical"> 기술점수</label><br><input id="wTechnical" type="number" step="0.05" min="0" value="0.0"></div>
+        <div class="score-cell"><label>신뢰도(Conf) 반영</label><br><input id="wConfidence" type="number" step="0.01" min="0" max="0.5" value="0.10"></div>
+        <div class="score-cell"><label>밸류갭 배율</label><br><input id="wValuation" type="number" step="0.05" min="0" value="0.20"></div>
       </div>
     </div>
 
@@ -130,6 +155,83 @@ function loadLimitPref(){
   const sel = document.getElementById('limitSelect');
   if(sel) sel.value = String(v);
 }
+
+const SCORE_PRESETS = {
+  default_6_4: { stock:0.6, theme:0.4, news:0.0, technical:0.0, confidence:0.10, valuation:0.20 },
+  balanced: { stock:0.5, theme:0.3, news:0.1, technical:0.1, confidence:0.10, valuation:0.20 },
+  theme_focus: { stock:0.4, theme:0.5, news:0.05, technical:0.05, confidence:0.10, valuation:0.20 },
+};
+
+function applyPreset(){
+  const preset = document.getElementById('scorePreset')?.value || 'default_6_4';
+  const p = SCORE_PRESETS[preset] || SCORE_PRESETS.default_6_4;
+  document.getElementById('useStock').checked = p.stock > 0;
+  document.getElementById('useTheme').checked = p.theme > 0;
+  document.getElementById('useNews').checked = p.news > 0;
+  document.getElementById('useTechnical').checked = p.technical > 0;
+  document.getElementById('wStock').value = p.stock;
+  document.getElementById('wTheme').value = p.theme;
+  document.getElementById('wNews').value = p.news;
+  document.getElementById('wTechnical').value = p.technical;
+  document.getElementById('wConfidence').value = p.confidence;
+  document.getElementById('wValuation').value = p.valuation;
+  saveScorePref();
+}
+
+function getScoreConfig(){
+  const num = (id, dv=0)=>{
+    const v = Number(document.getElementById(id)?.value);
+    return Number.isFinite(v) ? Math.max(0, v) : dv;
+  };
+  const asWeight = (useId, wId, dv=0)=> document.getElementById(useId)?.checked ? num(wId, dv) : 0;
+  return {
+    preset: document.getElementById('scorePreset')?.value || 'default_6_4',
+    wStock: asWeight('useStock','wStock',0.6),
+    wTheme: asWeight('useTheme','wTheme',0.4),
+    wNews: asWeight('useNews','wNews',0),
+    wTechnical: asWeight('useTechnical','wTechnical',0),
+    wConfidence: num('wConfidence',0.1),
+    wValuation: num('wValuation',0.2),
+  };
+}
+
+function saveScorePref(){
+  const m = getMarket();
+  localStorage.setItem(`invest_score_${m}`, JSON.stringify(getScoreConfig()));
+}
+
+function loadScorePref(){
+  const m = getMarket();
+  try{
+    const raw = localStorage.getItem(`invest_score_${m}`);
+    if(!raw){ applyPreset(); return; }
+    const c = JSON.parse(raw);
+    if(c.preset) document.getElementById('scorePreset').value = c.preset;
+    document.getElementById('wStock').value = c.wStock ?? 0.6;
+    document.getElementById('wTheme').value = c.wTheme ?? 0.4;
+    document.getElementById('wNews').value = c.wNews ?? 0;
+    document.getElementById('wTechnical').value = c.wTechnical ?? 0;
+    document.getElementById('wConfidence').value = c.wConfidence ?? 0.10;
+    document.getElementById('wValuation').value = c.wValuation ?? 0.20;
+    document.getElementById('useStock').checked = (Number(c.wStock)||0) > 0;
+    document.getElementById('useTheme').checked = (Number(c.wTheme)||0) > 0;
+    document.getElementById('useNews').checked = (Number(c.wNews)||0) > 0;
+    document.getElementById('useTechnical').checked = (Number(c.wTechnical)||0) > 0;
+  }catch(_){ applyPreset(); }
+}
+
+function scoreQueryString(){
+  const c = getScoreConfig();
+  const p = new URLSearchParams();
+  p.set('scorePreset', c.preset);
+  p.set('wStock', String(c.wStock));
+  p.set('wTheme', String(c.wTheme));
+  p.set('wNews', String(c.wNews));
+  p.set('wTechnical', String(c.wTechnical));
+  p.set('wConfidence', String(c.wConfidence));
+  p.set('wValuation', String(c.wValuation));
+  return p.toString();
+}
 function setLoading(on){
   const el=document.getElementById('topLoader');
   if(!el) return;
@@ -141,10 +243,11 @@ async function archiveSymbol(symbol){
   const limit = getLimit();
   try{
     setLoading(true);
+    const scoreConfig = getScoreConfig();
     const res = await fetch('/api/archive', {
       method:'POST',
       headers:{'Content-Type':'application/json'},
-      body:JSON.stringify({ symbol, market, limit }),
+      body:JSON.stringify({ symbol, market, limit, scoreConfig }),
     });
     const data = await res.json().catch(()=>({}));
     if(!res.ok){
@@ -284,7 +387,8 @@ function hideProgress(){
 
 async function waitReportReady(market, limit){
   while(true){
-    const p = await apiGet(`/api/report/progress?market=${market}&limit=${limit}&t=${Date.now()}`);
+    const qs = scoreQueryString();
+    const p = await apiGet(`/api/report/progress?market=${market}&limit=${limit}&${qs}&t=${Date.now()}`);
     if(p.status==='done'){
       hideProgress();
       return;
@@ -572,7 +676,9 @@ async function refreshData(){
   await ensureNotifyPermission();
   await ensurePushSubscription();
   saveLimitPref();
-  const r = await apiGet(`/api/report/refresh?market=${market}&limit=${limit}&t=${Date.now()}`);
+  saveScorePref();
+  const qs = scoreQueryString();
+  const r = await apiGet(`/api/report/refresh?market=${market}&limit=${limit}&${qs}&t=${Date.now()}`);
   if(r.status==='running' || r.__status===202){
     const pr = r.progress || {};
     showProgress(`⏳ 분석 시작... ${pr.done ?? 0}/${pr.total ?? 0} (${pr.progressPct ?? 0}%)`);
@@ -587,8 +693,9 @@ async function loadData(){
   const market = getMarket();
   const limit = getLimit();
   let d;
+  const qs = scoreQueryString();
   try{
-    d = await apiGet(`/api/report?market=${market}&limit=${limit}&t=${Date.now()}`);
+    d = await apiGet(`/api/report?market=${market}&limit=${limit}&${qs}&t=${Date.now()}`);
   }catch(e){
     showProgress('아직 저장된 분석 결과가 없어요. "새로 조회"를 눌러 분석을 시작하세요.');
     return;
@@ -598,7 +705,7 @@ async function loadData(){
     const pr = d.progress || {};
     showProgress(`⏳ 분석 중... ${pr.done ?? 0}/${pr.total ?? 0} (${pr.progressPct ?? 0}%)`);
     await waitReportReady(market, limit);
-    d = await apiGet(`/api/report?market=${market}&limit=${limit}&t=${Date.now()}`);
+    d = await apiGet(`/api/report?market=${market}&limit=${limit}&${qs}&t=${Date.now()}`);
   }
 
   document.getElementById('meta').innerHTML = `
@@ -733,6 +840,9 @@ async function loadData(){
 
 setMarketHeader();
 loadLimitPref();
+loadScorePref();
+['scorePreset','useStock','useTheme','useNews','useTechnical','wStock','wTheme','wNews','wTechnical','wConfidence','wValuation']
+  .forEach(id => document.getElementById(id)?.addEventListener('change', saveScorePref));
 ensureServiceWorker();
 loadData();
 </script>

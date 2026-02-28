@@ -9,7 +9,7 @@ import urllib.request
 from dataclasses import dataclass
 from datetime import datetime, UTC, timedelta
 from pathlib import Path
-from typing import Dict, List
+from typing import Any, Dict, List
 from zoneinfo import ZoneInfo
 
 import numpy as np
@@ -863,10 +863,100 @@ def _get_symbol_theme_meta(symbol: str) -> Dict:
     return out
 
 
-def _apply_runtime_theme_scores(rows: List[Dict]) -> List[Dict]:
+SCORE_PRESETS: Dict[str, Dict[str, float]] = {
+    # 사용자 기본 요청: 종목점수:테마점수 = 6:4
+    "default_6_4": {
+        "stock": 0.60,
+        "theme": 0.40,
+        "news": 0.00,
+        "technical": 0.00,
+        "confidence": 0.10,
+        "valuation": 0.20,
+    },
+    # 기존 방식에 가까운 밸런스
+    "balanced": {
+        "stock": 0.50,
+        "theme": 0.30,
+        "news": 0.10,
+        "technical": 0.10,
+        "confidence": 0.10,
+        "valuation": 0.20,
+    },
+    # 테마 중심
+    "theme_focus": {
+        "stock": 0.40,
+        "theme": 0.50,
+        "news": 0.05,
+        "technical": 0.05,
+        "confidence": 0.10,
+        "valuation": 0.20,
+    },
+}
+
+
+def _normalize_score_config(score_config: Dict[str, Any] | None) -> Dict[str, Any]:
+    raw = score_config or {}
+    preset = str(raw.get("preset") or "default_6_4").strip().lower()
+    if preset not in SCORE_PRESETS:
+        preset = "default_6_4"
+
+    base = SCORE_PRESETS[preset].copy()
+    comp = raw.get("components") if isinstance(raw.get("components"), dict) else {}
+
+    out_comp: Dict[str, float] = {}
+    for k in ("stock", "theme", "news", "technical"):
+        v = comp.get(k, base.get(k, 0.0))
+        try:
+            out_comp[k] = max(0.0, float(v))
+        except Exception:
+            out_comp[k] = float(base.get(k, 0.0))
+
+    total = sum(out_comp.values())
+    if total <= 0:
+        out_comp = {k: float(base.get(k, 0.0)) for k in ("stock", "theme", "news", "technical")}
+        total = sum(out_comp.values())
+    if total <= 0:
+        out_comp = {"stock": 1.0, "theme": 0.0, "news": 0.0, "technical": 0.0}
+        total = 1.0
+
+    for k in out_comp:
+        out_comp[k] = out_comp[k] / total
+
+    def _num(name: str) -> float:
+        dv = float(base.get(name, 0.0))
+        v = raw.get(name, dv)
+        try:
+            return float(v)
+        except Exception:
+            return dv
+
+    confidence_weight = max(0.0, _num("confidence"))
+    valuation_scale = max(0.0, _num("valuation"))
+
+    return {
+        "preset": preset,
+        "components": out_comp,
+        "confidence": confidence_weight,
+        "valuation": valuation_scale,
+    }
+
+
+def _score_methodology_text(cfg: Dict[str, Any]) -> str:
+    c = cfg.get("components", {})
+    return (
+        "S=(1-conf)*Core+conf*Confidence+valuationAdj; "
+        f"Core={c.get('stock', 0):.2f}Stock+{c.get('theme', 0):.2f}Theme+{c.get('news', 0):.2f}News+{c.get('technical', 0):.2f}Technical; "
+        f"conf={cfg.get('confidence', 0):.2f}; valuationScale={cfg.get('valuation', 0):.2f}; "
+        "Technical=direction/cross/distance, KR theme=Naver theme"
+    )
+
+
+def _apply_runtime_theme_scores(rows: List[Dict], score_config: Dict[str, Any] | None = None) -> List[Dict]:
     """각 종목 분석 후 종목별 theme를 추정하고 테마점수를 계산해 종목점수에 반영한다."""
     if not rows:
         return rows
+
+    cfg = _normalize_score_config(score_config)
 
     # 1) 각 종목 theme 메타 부착
     for r in rows:
@@ -914,19 +1004,26 @@ def _apply_runtime_theme_scores(rows: List[Dict]) -> List[Dict]:
             })
             r["components"]["theme"] = th
 
-            # 요청 비율 반영: 종목(5) : 테마(3) : 뉴스(1) : 기술(1)
+            # 사용자 설정 비율 반영 (UI에서 가중치/포함항목 조정)
             base = float(r.get("scoreBase", r.get("score", 50.0)))
             news_s = float((r.get("components", {}).get("crowd", {}) or {}).get("score", 50.0))
             tech_s = float((r.get("components", {}).get("technical", {}) or {}).get("score", 50.0))
             conf = float(r.get("confidence", 50.0))
-            core = 0.50 * base + 0.30 * th["score"] + 0.10 * news_s + 0.10 * tech_s
-            final_score = 0.9 * core + 0.1 * conf
+            w = cfg.get("components", {})
+            core = (
+                float(w.get("stock", 0.0)) * base
+                + float(w.get("theme", 0.0)) * float(th.get("score", 50.0))
+                + float(w.get("news", 0.0)) * news_s
+                + float(w.get("technical", 0.0)) * tech_s
+            )
+            conf_w = float(np.clip(cfg.get("confidence", 0.10), 0.0, 0.50))
+            final_score = (1.0 - conf_w) * core + conf_w * conf
 
             # 밸류에이션 갭(목표가-현재가) 소폭 반영
             up = (r.get("components", {}).get("reportConsensus", {}) or {}).get("upsidePct")
             if isinstance(up, (int, float)):
                 # 과도한 왜곡 방지를 위해 캡 적용: -20%~+40%를 -4~+8점으로 반영
-                valuation_adj = float(np.clip(up, -20, 40)) * 0.2
+                valuation_adj = float(np.clip(up, -20, 40)) * float(cfg.get("valuation", 0.20))
                 final_score += valuation_adj
                 r.setdefault("components", {})["valuation"] = {
                     "upsidePct": round(float(up), 2),
@@ -1211,7 +1308,7 @@ def _is_etf_like(row: Dict) -> bool:
     return symbol in {"SPY", "QQQ", "EEM", "EFA", "VNQ", "TLT", "IEF", "LQD", "GLD", "SLV", "USO", "DBC"}
 
 
-def build_report(market: str = "all", candidate_limit: int | None = None, progress_cb=None) -> Dict:
+def build_report(market: str = "all", candidate_limit: int | None = None, progress_cb=None, score_config: Dict[str, Any] | None = None) -> Dict:
     rows = []
     failed = []
 
@@ -1242,8 +1339,10 @@ def build_report(market: str = "all", candidate_limit: int | None = None, progre
     # 사용자 요청: ETF 제외 (단일 주식만 허용)
     rows = [r for r in rows if not _is_etf_like(r)]
 
+    cfg = _normalize_score_config(score_config)
+
     # 종목분석 완료 후, 런타임 테마 추정/테마점수 산출/최종점수 반영
-    rows = _apply_runtime_theme_scores(rows)
+    rows = _apply_runtime_theme_scores(rows, score_config=cfg)
 
     rows.sort(key=lambda x: x["score"], reverse=True)
 
@@ -1288,7 +1387,8 @@ def build_report(market: str = "all", candidate_limit: int | None = None, progre
         "model": f"{market_label} Single-Stock Dual Ranking v5 (No Momentum + Technical)",
         "market": mk,
         "candidateLimit": total_assets,
-        "methodology": "S=0.9*(0.50Stock+0.30Theme+0.10News+0.10Technical)+0.1Conf; Technical=direction/cross/distance, KR theme=Naver theme",
+        "methodology": _score_methodology_text(cfg),
+        "scoreConfig": cfg,
 
         "topPick": top,
         "rankings": rows,

@@ -166,8 +166,44 @@ def _normalize_candidate_limit(v) -> int:
     return n if n in {50, 100, 200, 300} else 300
 
 
-def _report_key(market: str, candidate_limit: int) -> str:
-    return f"{market}:{candidate_limit}"
+def _parse_score_config_from_request() -> dict:
+    preset = (request.args.get('scorePreset', default='default_6_4', type=str) or 'default_6_4').strip().lower()
+
+    def _num(name: str, dv: float) -> float:
+        try:
+            return float(request.args.get(name, default=dv, type=float))
+        except Exception:
+            return dv
+
+    return {
+        'preset': preset,
+        'components': {
+            'stock': _num('wStock', 0.6),
+            'theme': _num('wTheme', 0.4),
+            'news': _num('wNews', 0.0),
+            'technical': _num('wTechnical', 0.0),
+        },
+        'confidence': _num('wConfidence', 0.10),
+        'valuation': _num('wValuation', 0.20),
+    }
+
+
+def _score_config_key(score_config: dict) -> str:
+    sc = score_config or {}
+    c = sc.get('components') or {}
+    return (
+        f"{sc.get('preset', 'default_6_4')}"
+        f":{float(c.get('stock', 0.0)):.4f}"
+        f":{float(c.get('theme', 0.0)):.4f}"
+        f":{float(c.get('news', 0.0)):.4f}"
+        f":{float(c.get('technical', 0.0)):.4f}"
+        f":{float(sc.get('confidence', 0.0)):.4f}"
+        f":{float(sc.get('valuation', 0.0)):.4f}"
+    )
+
+
+def _report_key(market: str, candidate_limit: int, score_config: dict) -> str:
+    return f"{market}:{candidate_limit}:{_score_config_key(score_config)}"
 
 
 def _snapshot_worker():
@@ -188,7 +224,7 @@ def _snapshot_worker():
 threading.Thread(target=_snapshot_worker, daemon=True).start()
 
 
-def _run_report_job(key: str, market: str, candidate_limit: int, task_id: str):
+def _run_report_job(key: str, market: str, candidate_limit: int, score_config: dict, task_id: str):
     def _progress_cb(done: int, total: int, symbol: str):
         with _REPORT_LOCK:
             st = _REPORT_PROGRESS.get(key, {})
@@ -206,7 +242,7 @@ def _run_report_job(key: str, market: str, candidate_limit: int, task_id: str):
 
     try:
         clear_runtime_caches()
-        data = build_report(market=market, candidate_limit=candidate_limit, progress_cb=_progress_cb)
+        data = build_report(market=market, candidate_limit=candidate_limit, progress_cb=_progress_cb, score_config=score_config)
         with _REPORT_LOCK:
             _REPORT_CACHE[key] = {"ts": time.time(), "data": data}
             st = _REPORT_PROGRESS.get(key, {})
@@ -238,7 +274,8 @@ def api_report():
     if market not in {'all', 'kr', 'us'}:
         market = 'all'
     candidate_limit = _normalize_candidate_limit(request.args.get('limit', default=300, type=int))
-    key = _report_key(market, candidate_limit)
+    score_config = _parse_score_config_from_request()
+    key = _report_key(market, candidate_limit, score_config)
 
     cached = _REPORT_CACHE.get(key)
     if cached and cached.get('data') is not None:
@@ -257,7 +294,8 @@ def api_report_refresh():
     if market not in {'all', 'kr', 'us'}:
         market = 'all'
     candidate_limit = _normalize_candidate_limit(request.args.get('limit', default=300, type=int))
-    key = _report_key(market, candidate_limit)
+    score_config = _parse_score_config_from_request()
+    key = _report_key(market, candidate_limit, score_config)
 
     with _REPORT_LOCK:
         st = _REPORT_PROGRESS.get(key)
@@ -276,7 +314,7 @@ def api_report_refresh():
             "updatedAt": datetime.now(KST).isoformat(),
             "error": None,
         }
-        threading.Thread(target=_run_report_job, args=(key, market, candidate_limit, task_id), daemon=True).start()
+        threading.Thread(target=_run_report_job, args=(key, market, candidate_limit, score_config, task_id), daemon=True).start()
 
     return jsonify({"status": "running", "market": market, "limit": candidate_limit, "progress": _REPORT_PROGRESS.get(key)}), 202
 
@@ -287,7 +325,8 @@ def api_report_progress():
     if market not in {'all', 'kr', 'us'}:
         market = 'all'
     candidate_limit = _normalize_candidate_limit(request.args.get('limit', default=300, type=int))
-    key = _report_key(market, candidate_limit)
+    score_config = _parse_score_config_from_request()
+    key = _report_key(market, candidate_limit, score_config)
 
     st = _REPORT_PROGRESS.get(key)
     if not st:
@@ -639,7 +678,8 @@ def api_archive_save():
     if market not in {'all', 'kr', 'us'}:
         market = 'all'
     candidate_limit = _normalize_candidate_limit(payload.get('limit', 300))
-    key = _report_key(market, candidate_limit)
+    score_config = payload.get('scoreConfig') if isinstance(payload.get('scoreConfig'), dict) else {'preset': 'default_6_4'}
+    key = _report_key(market, candidate_limit, score_config)
     cached = _REPORT_CACHE.get(key)
     if not cached or not cached.get('data'):
         return jsonify({'ok': False, 'error': 'report_not_ready'}), 404
