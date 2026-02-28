@@ -22,6 +22,9 @@
     .top-loader{position:fixed;top:0;left:0;right:0;height:3px;background:transparent;z-index:9999;overflow:hidden;display:none}
     .top-loader .bar{position:absolute;height:100%;width:28%;background:#9ca3af;animation:slide 1.1s linear infinite;border-radius:999px}
     @keyframes slide{0%{left:-30%}100%{left:100%}}
+    .chart-wrapper{position:relative}
+    .chart-tooltip{position:absolute;top:0;left:0;padding:4px 10px;background:rgba(15,23,42,0.95);border:1px solid #475569;border-radius:8px;font-size:11.5px;color:#f8fafc;pointer-events:none;white-space:nowrap;box-shadow:0 8px 20px rgba(0,0,0,0.45);display:none;z-index:2;}
+    .chart-hit{pointer-events:all;touch-action:none;}
   </style>
 </head>
 <body>
@@ -66,6 +69,8 @@
 
 <script>
 let __chartForceNext = false;
+let __notifyOnNextResult = false;
+let __lastNotifiedSnapshot = '';
 function fmt(v,d=2){return (v===null||v===undefined)?'-':Number(v).toLocaleString(undefined,{maximumFractionDigits:d});}
 function getMarket(){
   const m = new URLSearchParams(location.search).get('market');
@@ -115,6 +120,37 @@ async function apiGet(url){
   } finally {
     setLoading(false);
   }
+}
+
+async function ensureNotifyPermission(){
+  if(!('Notification' in window)) return false;
+  if(Notification.permission === 'granted') return true;
+  if(Notification.permission === 'denied') return false;
+  try{
+    const perm = await Notification.requestPermission();
+    return perm === 'granted';
+  }catch(_){
+    return false;
+  }
+}
+
+function notifyRecommendationReady(d, x){
+  if(!x) return;
+  const snapshotKey = `${d.generatedAt || ''}|${x.symbol || ''}|${x.score || ''}`;
+  if(snapshotKey && snapshotKey === __lastNotifiedSnapshot) return;
+  __lastNotifiedSnapshot = snapshotKey;
+
+  const body = `${x.symbol} (${x.name}) · 점수 ${fmt(x.score)} · 예상수익 ${fmtPct(x.expectedReturnPct)}`;
+
+  if('Notification' in window && Notification.permission === 'granted'){
+    try{
+      new Notification('추천 분석 완료', { body, tag:'invest-recommend-ready', renotify:true });
+    }catch(_){/* noop */}
+  }
+
+  try{
+    if(navigator.vibrate) navigator.vibrate([120, 60, 120]);
+  }catch(_){/* noop */}
 }
 
 function showProgress(text){
@@ -226,6 +262,7 @@ async function renderMiniChart(symbol, elId, force=false){
       return;
     }
 
+    const labels = (d.labels || []).slice(-180);
     const o = d.open.slice(-180).map(Number);
     const hArr = d.high.slice(-180).map(Number);
     const lArr = d.low.slice(-180).map(Number);
@@ -241,9 +278,9 @@ async function renderMiniChart(symbol, elId, force=false){
 
     const sma = (arr, p)=>arr.map((_,i)=>{
       if(i < p-1) return null;
-      const w = arr.slice(i-p+1,i+1).filter(Number.isFinite);
-      if(w.length!==p) return null;
-      return w.reduce((a,b)=>a+b,0)/p;
+      const wv = arr.slice(i-p+1,i+1).filter(Number.isFinite);
+      if(wv.length!==p) return null;
+      return wv.reduce((a,b)=>a+b,0)/p;
     });
     const ma20 = sma(c,20);
     const ma60 = sma(c,60);
@@ -278,6 +315,7 @@ async function renderMiniChart(symbol, elId, force=false){
     const wick = [];
     const body = [];
     const vols = [];
+    const pointerOverlays = [];
     for(let i=0;i<m;i++){
       const cx = pL + slot*i + slot/2;
       const oy = y(o[i]);
@@ -295,6 +333,15 @@ async function renderMiniChart(symbol, elId, force=false){
       const vol = Number.isFinite(vArr[i]) ? vArr[i] : 0;
       const vh = (vol / maxVol) * volH;
       vols.push(`<rect x='${(cx-bodyW/2).toFixed(2)}' y='${(volTop + (volH-vh)).toFixed(2)}' width='${bodyW.toFixed(2)}' height='${Math.max(vh,0.8).toFixed(2)}' fill='${up ? '#1f9d55' : '#b91c1c'}' opacity='0.75'/>`);
+
+      const pointerWidth = Math.max(slot * 0.92, 6);
+      const pointerHeight = priceH + volH + 18;
+      const pointerX = cx - pointerWidth / 2;
+      const pointerY = pT - 4;
+      const label = labels[i] || '';
+      const safeLabel = label.replace(/"/g,'&quot;').replace(/'/g,'&#39;');
+      const closeVal = Number.isFinite(c[i]) ? c[i] : null;
+      pointerOverlays.push(`<rect x='${pointerX.toFixed(2)}' y='${pointerY.toFixed(2)}' width='${pointerWidth.toFixed(2)}' height='${pointerHeight.toFixed(2)}' fill='transparent' data-date='${safeLabel}' data-price='${closeVal !== null ? closeVal.toFixed(4) : ''}' class='chart-hit'/>`);
     }
 
     const toPath = (arr)=>{
@@ -316,24 +363,64 @@ async function renderMiniChart(symbol, elId, force=false){
     const minTxt = minRaw.toLocaleString(undefined,{maximumFractionDigits:0});
 
     el.innerHTML = `
-      <svg viewBox='0 0 ${w} ${hPx}' width='100%' height='180' preserveAspectRatio='xMidYMid meet'>
-        <rect x='0' y='0' width='${w}' height='${hPx}' fill='#0f172a' rx='6'/>
-        ${grid.join('')}
-        ${wick.join('')}
-        ${body.join('')}
-        ${ma20Path ? `<polyline fill='none' stroke='#f59e0b' stroke-width='1.4' points='${ma20Path}'/>` : ''}
-        ${ma60Path ? `<polyline fill='none' stroke='#60a5fa' stroke-width='1.4' points='${ma60Path}'/>` : ''}
-        ${ma120Path ? `<polyline fill='none' stroke='#a78bfa' stroke-width='1.4' points='${ma120Path}'/>` : ''}
-        <line x1='${pL}' y1='${volTop-1}' x2='${w-pR}' y2='${volTop-1}' stroke='#24304f' stroke-width='1'/>
-        ${vols.join('')}
-        <text x='${w-pR+4}' y='${(pT+10).toFixed(1)}' fill='#93a4c7' font-size='10'>${maxTxt}</text>
-        <text x='${w-pR+4}' y='${(pT+priceH).toFixed(1)}' fill='#93a4c7' font-size='10'>${minTxt}</text>
-        <text x='${pL}' y='${(hPx-4).toFixed(1)}' fill='#f59e0b' font-size='10'>MA20</text>
-        <text x='${(pL+38).toFixed(1)}' y='${(hPx-4).toFixed(1)}' fill='#60a5fa' font-size='10'>MA60</text>
-        <text x='${(pL+76).toFixed(1)}' y='${(hPx-4).toFixed(1)}' fill='#a78bfa' font-size='10'>MA120</text>
-        <text x='${(w-pR-28).toFixed(1)}' y='${(volTop+10).toFixed(1)}' fill='#93a4c7' font-size='9'>VOL</text>
-      </svg>
+      <div class='chart-wrapper'>
+        <svg viewBox='0 0 ${w} ${hPx}' width='100%' height='180' preserveAspectRatio='xMidYMid meet'>
+          <rect x='0' y='0' width='${w}' height='${hPx}' fill='#0f172a' rx='6'/>
+          ${grid.join('')}
+          ${wick.join('')}
+          ${body.join('')}
+          ${ma20Path ? `<polyline fill='none' stroke='#f59e0b' stroke-width='1.4' points='${ma20Path}'/>` : ''}
+          ${ma60Path ? `<polyline fill='none' stroke='#60a5fa' stroke-width='1.4' points='${ma60Path}'/>` : ''}
+          ${ma120Path ? `<polyline fill='none' stroke='#a78bfa' stroke-width='1.4' points='${ma120Path}'/>` : ''}
+          <line x1='${pL}' y1='${volTop-1}' x2='${w-pR}' y2='${volTop-1}' stroke='#24304f' stroke-width='1'/>
+          ${vols.join('')}
+          ${pointerOverlays.join('')}
+          <text x='${w-pR+4}' y='${(pT+10).toFixed(1)}' fill='#93a4c7' font-size='10'>${maxTxt}</text>
+          <text x='${w-pR+4}' y='${(pT+priceH).toFixed(1)}' fill='#93a4c7' font-size='10'>${minTxt}</text>
+          <text x='${pL}' y='${(hPx-4).toFixed(1)}' fill='#f59e0b' font-size='10'>MA20</text>
+          <text x='${(pL+38).toFixed(1)}' y='${(hPx-4).toFixed(1)}' fill='#60a5fa' font-size='10'>MA60</text>
+          <text x='${(pL+76).toFixed(1)}' y='${(hPx-4).toFixed(1)}' fill='#a78bfa' font-size='10'>MA120</text>
+          <text x='${(w-pR-28).toFixed(1)}' y='${(volTop+10).toFixed(1)}' fill='#93a4c7' font-size='9'>VOL</text>
+        </svg>
+        <div class='chart-tooltip'></div>
+      </div>
     `;
+
+    const wrapper = el.querySelector('.chart-wrapper');
+    const tooltip = el.querySelector('.chart-tooltip');
+    if(wrapper && tooltip){
+      const hits = wrapper.querySelectorAll('.chart-hit');
+      const hideTooltip = () => { tooltip.style.display = 'none'; };
+      const updateTooltip = (evt, txt) => {
+        tooltip.textContent = txt;
+        tooltip.style.display = 'block';
+        const bounds = wrapper.getBoundingClientRect();
+        const tipRect = tooltip.getBoundingClientRect();
+        const offsetX = evt.clientX - bounds.left;
+        const offsetY = evt.clientY - bounds.top;
+        let left = offsetX - tipRect.width / 2;
+        left = Math.max(4, Math.min(left, bounds.width - tipRect.width - 4));
+        let top = offsetY - tipRect.height - 10;
+        if(top < 4) top = offsetY + 6;
+        tooltip.style.left = `${left}px`;
+        tooltip.style.top = `${top}px`;
+      };
+
+      hits.forEach(hit => {
+        const label = hit.dataset.date || '';
+        const priceVal = Number(hit.dataset.price);
+        const parts = [];
+        if(label) parts.push(`날짜 ${label}`);
+        if(Number.isFinite(priceVal)) parts.push(`종가 ${fmt(priceVal)}`);
+        const txt = parts.join(' · ') || '날짜 정보 없음';
+        const handler = (evt) => updateTooltip(evt, txt);
+        hit.addEventListener('pointerenter', handler);
+        hit.addEventListener('pointermove', handler);
+        hit.addEventListener('pointerleave', hideTooltip);
+        hit.addEventListener('pointercancel', hideTooltip);
+      });
+      wrapper.addEventListener('pointerleave', hideTooltip);
+    }
   }catch(_){
     el.innerHTML = `<div class='tiny'>차트 로딩 실패 · <a href='https://finance.yahoo.com/quote/${symbol}' target='_blank'>Yahoo 차트 보기</a></div>`;
   }
@@ -365,6 +452,8 @@ async function refreshChartsOnly(){
 async function refreshData(){
   const market = getMarket();
   const limit = getLimit();
+  __notifyOnNextResult = true;
+  await ensureNotifyPermission();
   saveLimitPref();
   const r = await apiGet(`/api/report/refresh?market=${market}&limit=${limit}&t=${Date.now()}`);
   if(r.status==='running' || r.__status===202){
@@ -413,6 +502,7 @@ async function loadData(){
 
   const x = d.topPick;
   if(!x){
+    __notifyOnNextResult = false;
     document.getElementById('kpiSymbol').textContent='-';
     document.getElementById('kpiScore').textContent='-';
     document.getElementById('kpiRet').textContent='-';
@@ -427,6 +517,11 @@ async function loadData(){
   document.getElementById('kpiScore').textContent = fmt(x.score);
   document.getElementById('kpiRet').textContent = fmtPct(x.expectedReturnPct);
   document.getElementById('kpiRR').textContent = fmt(x.riskReward);
+
+  if(__notifyOnNextResult){
+    notifyRecommendationReady(d, x);
+    __notifyOnNextResult = false;
+  }
 
   const topLossPct = pctFrom(x.currentPrice, x.plan.stopLoss);
   const topProfit1Pct = pctFrom(x.currentPrice, x.plan.takeProfit1);
