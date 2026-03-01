@@ -1127,7 +1127,11 @@ def _risk_score(s: pd.Series) -> Dict:
 
 
 def _technical_score(s: pd.Series, target_price: float | None = None) -> Dict:
-    """기술적 분석: 방향성 분석 + 크로스 분석 + 이격도 분석만 사용."""
+    """기술적 분석(사용자 요청): MA20/MA60/MA120 거리 기반 점수.
+    - 세 이평선 모두 절대값 임계치 4% 사용
+    - 과열 감점 없음
+    - 추세 필터 없음
+    """
     close = s.astype(float)
     cur = float(close.iloc[-1])
 
@@ -1139,67 +1143,48 @@ def _technical_score(s: pd.Series, target_price: float | None = None) -> Dict:
     ma60 = float(ma60_series.iloc[-1])
     ma120 = float(ma120_series.iloc[-1]) if len(close) >= 120 else ma60
 
-    # 1) 방향성 분석: MA20 / MA60 기울기
-    ma20_prev = float(ma20_series.iloc[-6]) if len(ma20_series.dropna()) >= 6 else ma20
-    ma60_prev = float(ma60_series.iloc[-6]) if len(ma60_series.dropna()) >= 6 else ma60
-    dir20 = (ma20 / ma20_prev - 1) * 100 if ma20_prev else 0.0
-    dir60 = (ma60 / ma60_prev - 1) * 100 if ma60_prev else 0.0
-
-    # 2) 크로스 분석: MA20-MA60 관계 변화
-    spread_now = ma20 - ma60
-    spread_prev = (float(ma20_series.iloc[-6]) - float(ma60_series.iloc[-6])) if (len(ma20_series.dropna()) >= 6 and len(ma60_series.dropna()) >= 6) else spread_now
-
-    # 3) 이격도 분석: 현재가 vs MA20
     dist_ma20 = (cur / ma20 - 1) * 100 if ma20 else 0.0
+    dist_ma60 = (cur / ma60 - 1) * 100 if ma60 else 0.0
+    dist_ma120 = (cur / ma120 - 1) * 100 if ma120 else 0.0
 
-    score = 50.0
+    # 절대값 4% 이내일 때만 선형 가점 (가중치: MA20 < MA60 < MA120)
+    def _prox_bonus(dist_pct: float, weight: float) -> float:
+        d = abs(float(dist_pct))
+        if d > 4.0:
+            return 0.0
+        return (1.0 - d / 4.0) * weight
 
-    # 방향성 점수
-    if dir20 > 0.2 and dir60 >= 0:
-        score += 10
-    elif dir20 < -0.2 and dir60 <= 0:
-        score -= 10
+    b20 = _prox_bonus(dist_ma20, 10.0)
+    b60 = _prox_bonus(dist_ma60, 20.0)
+    b120 = _prox_bonus(dist_ma120, 30.0)
 
-    # 크로스 점수
-    if spread_prev <= 0 < spread_now:
-        score += 10  # 골든크로스 전환
-        cross_state = "golden-cross"
-    elif spread_prev >= 0 > spread_now:
-        score -= 10  # 데드크로스 전환
-        cross_state = "dead-cross"
-    else:
-        cross_state = "above-ma60" if spread_now > 0 else "below-ma60"
-        score += 4 if spread_now > 0 else -4
+    score = 50.0 + b20 + b60 + b120
 
-    # 이격도 점수 (먹을 자리/과열)
-    if -8 <= dist_ma20 <= -2:
-        score += 16
-        setup = "adjustment-zone"
-        regime = "adjustment"
-    elif dist_ma20 >= 8:
-        score -= 16
-        setup = "overheat-zone"
-        regime = "overheat"
-    else:
-        setup = "neutral-zone"
-        regime = "neutral"
-
-    score = float(np.clip(score, 0, 100))
+    # 보조 표기용 상태
+    best = max([(b20, "near-ma20"), (b60, "near-ma60"), (b120, "near-ma120")], key=lambda x: x[0])[1]
 
     return {
-        "score": round(score, 2),
+        "score": round(float(score), 2),
         "rsi14": None,
         "distMa20Pct": round(float(dist_ma20), 2),
+        "distMa60Pct": round(float(dist_ma60), 2),
+        "distMa120Pct": round(float(dist_ma120), 2),
         "from20dHighPct": None,
         "ma20": round(ma20, 2),
         "ma60": round(ma60, 2),
         "ma120": round(ma120, 2),
-        "setup": setup,
-        "regime": regime,
-        "direction20Pct": round(float(dir20), 2),
-        "direction60Pct": round(float(dir60), 2),
-        "crossState": cross_state,
+        "setup": best,
+        "regime": "distance-only",
+        "direction20Pct": None,
+        "direction60Pct": None,
+        "crossState": "disabled",
         "headroomPct": None,
+        "distanceThresholdPct": 4.0,
+        "distanceBonuses": {
+            "ma20": round(float(b20), 2),
+            "ma60": round(float(b60), 2),
+            "ma120": round(float(b120), 2),
+        },
     }
 
 
