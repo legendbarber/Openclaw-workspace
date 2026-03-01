@@ -277,13 +277,13 @@ def api_report():
     score_config = _parse_score_config_from_request()
     key = _report_key(market, candidate_limit, score_config)
 
-    cached = _REPORT_CACHE.get(key)
-    if cached and cached.get('data') is not None:
-        return jsonify(cached['data'])
-
     st = _REPORT_PROGRESS.get(key)
     if st and st.get("status") == "running":
         return jsonify({"status": "running", "market": market, "limit": candidate_limit, "progress": st}), 202
+
+    cached = _REPORT_CACHE.get(key)
+    if cached and cached.get('data') is not None:
+        return jsonify(cached['data'])
 
     return jsonify({"status": "idle", "market": market, "limit": candidate_limit, "message": "no_cached_report"}), 404
 
