@@ -682,23 +682,10 @@ def api_archive_save():
     key = _report_key(market, candidate_limit, score_config)
     cached = _REPORT_CACHE.get(key)
 
-    # exact score-config key miss 시, 같은 market/limit의 최신 완료 리포트로 fallback
+    # 저장은 반드시 "현재 화면의 market/limit/scoreConfig와 정확히 일치하는 리포트"에서만 허용
+    # (fallback 허용 시 사용자가 의도하지 않은 결과셋 기준으로 저장될 수 있음)
     if not cached or not cached.get('data'):
-        prefix = f"{market}:{candidate_limit}:"
-        candidates = []
-        for k, v in _REPORT_CACHE.items():
-            if not str(k).startswith(prefix):
-                continue
-            if not isinstance(v, dict) or not v.get('data'):
-                continue
-            ts = float(v.get('ts', 0) or 0)
-            candidates.append((ts, v))
-        if candidates:
-            candidates.sort(key=lambda x: x[0], reverse=True)
-            cached = candidates[0][1]
-
-    if not cached or not cached.get('data'):
-        return jsonify({'ok': False, 'error': 'report_not_ready'}), 404
+        return jsonify({'ok': False, 'error': 'report_not_ready_for_current_config'}), 404
 
     report = cached['data']
     item = None

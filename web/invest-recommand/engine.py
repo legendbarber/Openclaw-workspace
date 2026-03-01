@@ -1512,22 +1512,10 @@ def _append_log(report: Dict):
     state.append(item)
     state = state[-200:]
     STATE_PATH.write_text(json.dumps(state, ensure_ascii=False, indent=2), encoding="utf-8")
-    top = report.get("topPick") or {}
-    if top:
-        entry = {
-            "symbol": top.get("symbol"),
-            "name": top.get("name"),
-            "score": top.get("score"),
-            "expectedReturnPct": top.get("expectedReturnPct"),
-            "riskReward": top.get("riskReward"),
-            "generatedAt": report.get("generatedAt"),
-            "market": report.get("market"),
-            "candidateLimit": report.get("candidateLimit"),
-            "methodology": report.get("methodology"),
-            "plan": top.get("plan"),
-            "components": top.get("components"),
-        }
-        save_archive_entry(entry)
+    # NOTE:
+    # 아카이브는 사용자가 명시적으로 "아카이브 저장" 버튼을 눌렀을 때만 저장한다.
+    # 과거에는 리포트 생성 시 topPick을 자동 저장했는데,
+    # 이 동작이 "내가 저장하지 않은 종목이 쌓임" 이슈를 유발할 수 있어 제거함.
 
 
 def list_archived_picks() -> List[Dict]:
