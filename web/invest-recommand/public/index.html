@@ -225,6 +225,12 @@ function appliedFormulaText(sc){
   const fs = (n)=> Number(n||0).toFixed(2);
   return `Core=${fs(c.stock)}Stock+${fs(c.theme)}Theme+${fs(c.news)}News+${fs(c.technical)}Technical, conf=${fs(sc?.confidence)}, valuation=${fs(sc?.valuation)}`;
 }
+
+function recommendationFormulaText(item){
+  const c = item?.components || {};
+  const fs = (n)=> Number(n||0).toFixed(2);
+  return `추천 점수식: 종합점수 = (${fs(c?.scoreMix?.stockWeight)}×종목 ${fs(item?.scoreBase)} + ${fs(c?.scoreMix?.themeWeight)}×테마 ${fs(c?.theme?.score)} + ${fs(c?.scoreMix?.newsWeight)}×뉴스 ${fs(c?.crowd?.score)} + ${fs(c?.scoreMix?.technicalWeight)}×기술 ${fs(c?.technical?.score)}) + 신뢰도/밸류갭 보정`;
+}
 function setLoading(on){
   const el=document.getElementById('topLoader');
   if(!el) return;
@@ -754,6 +760,7 @@ async function loadData(){
     <div>${detailLink(x.symbol)}</div>
     <div>카테고리: ${x.category} / 종합점수: <b>${fmt(x.score)}</b></div>
     <div><b>테마:</b> ${x.components?.theme?.theme || '-'} (테마점수 ${fmt(x.components?.theme?.themeScore)} / 리더 ${fmt(x.components?.theme?.leaderScore)} / 반영 ${fmt(x.components?.theme?.score)})</div>
+    <div class='tiny'>${recommendationFormulaText(x)}</div>
     <div>현재가: ${fmt(x.currentPrice)} / <b>목표주가 컨센서스:</b> ${fmt(x.components?.reportConsensus?.targetMeanPrice)} (${fmtPct(x.components?.reportConsensus?.upsidePct)})</div>
     <div><b>컨센서스 점수:</b> ${fmt(x.components?.reportConsensus?.score)} / <b>의견수:</b> ${fmt(x.components?.reportConsensus?.analystOpinions,0)} / <b>소스:</b> ${x.components?.reportConsensus?.source || '-'}</div>
     <div><b>상품 설명:</b> ${productDesc(x.symbol, x.name, x.category)}</div>
@@ -792,6 +799,7 @@ async function loadData(){
       <br>
       점수: ${fmt(r.score)} / 현재가: ${fmt(r.currentPrice)}<br>
       <b>테마:</b> ${r.components?.theme?.theme || '-'} (반영 ${fmt(r.components?.theme?.score)})<br>
+      <span class='tiny'>${recommendationFormulaText(r)}</span><br>
       목표주가 컨센서스: ${fmt(r.components?.reportConsensus?.targetMeanPrice)} (${fmtPct(r.components?.reportConsensus?.upsidePct)})<br>
       <b>컨센서스:</b> 점수 ${fmt(r.components?.reportConsensus?.score)} / 의견수 ${fmt(r.components?.reportConsensus?.analystOpinions,0)} / 소스 ${r.components?.reportConsensus?.source || '-'}<br>
       <b>설명:</b> ${productDesc(r.symbol, r.name, r.category)}<br>

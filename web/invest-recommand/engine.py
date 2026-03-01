@@ -1019,6 +1019,17 @@ def _apply_runtime_theme_scores(rows: List[Dict], score_config: Dict[str, Any] |
             conf_w = float(np.clip(cfg.get("confidence", 0.10), 0.0, 0.50))
             final_score = (1.0 - conf_w) * core + conf_w * conf
 
+            r.setdefault("components", {})["scoreMix"] = {
+                "stockWeight": round(float(w.get("stock", 0.0)), 4),
+                "themeWeight": round(float(w.get("theme", 0.0)), 4),
+                "newsWeight": round(float(w.get("news", 0.0)), 4),
+                "technicalWeight": round(float(w.get("technical", 0.0)), 4),
+                "confidenceWeight": round(float(conf_w), 4),
+                "valuationScale": round(float(cfg.get("valuation", 0.20)), 4),
+                "coreScore": round(float(core), 2),
+                "confidence": round(float(conf), 2),
+            }
+
             # 밸류에이션 갭(목표가-현재가) 소폭 반영
             up = (r.get("components", {}).get("reportConsensus", {}) or {}).get("upsidePct")
             if isinstance(up, (int, float)):
