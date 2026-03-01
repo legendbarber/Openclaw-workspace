@@ -176,6 +176,7 @@ function applyPreset(){
   document.getElementById('wConfidence').value = p.confidence;
   document.getElementById('wValuation').value = p.valuation;
   saveScorePref();
+  refreshData();
 }
 
 function getScoreConfig(){
@@ -231,6 +232,12 @@ function scoreQueryString(){
   p.set('wConfidence', String(c.wConfidence));
   p.set('wValuation', String(c.wValuation));
   return p.toString();
+}
+
+function appliedFormulaText(sc){
+  const c = sc?.components || {};
+  const fs = (n)=> Number(n||0).toFixed(2);
+  return `Core=${fs(c.stock)}Stock+${fs(c.theme)}Theme+${fs(c.news)}News+${fs(c.technical)}Technical, conf=${fs(sc?.confidence)}, valuation=${fs(sc?.valuation)}`;
 }
 function setLoading(on){
   const el=document.getElementById('topLoader');
@@ -708,11 +715,13 @@ async function loadData(){
     d = await apiGet(`/api/report?market=${market}&limit=${limit}&${qs}&t=${Date.now()}`);
   }
 
+  const formulaLine = d.scoreConfig ? appliedFormulaText(d.scoreConfig) : '(서버 구버전 응답) 점수식 설정값 미포함';
   document.getElementById('meta').innerHTML = `
     <b>생성시각:</b> ${new Date(d.generatedAt).toLocaleString()}<br>
     <b>모델:</b> ${d.model}<br>
     <b>후보범위:</b> 상위 ${d.candidateLimit || limit} 종목<br>
-    <b>점수식:</b> ${d.methodology}
+    <b>적용 점수식(실계산):</b> ${formulaLine}<br>
+    <b>엔진 표기:</b> ${d.methodology || '-'}
   `;
 
   const notrade = document.getElementById('notrade');
