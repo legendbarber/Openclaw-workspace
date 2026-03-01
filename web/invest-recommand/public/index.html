@@ -54,6 +54,7 @@
           <option value="300" selected>300</option>
         </select>
         <button onclick="refreshData()">새로 조회</button>
+        <button id="refreshAllLimitsBtn" onclick="refreshAllLimits()">전체(50→100→200→300) 새로 조회</button>
         <button onclick="refreshChartsOnly()">차트만 최신화</button>
         <button onclick="updateUniverse()">시가총액 업데이트</button>
         <button onclick="location.href='/invest-recommend/archive'">추천 아카이브</button>
@@ -686,6 +687,42 @@ async function refreshData(){
     return;
   }
   await loadData();
+}
+
+async function refreshAllLimits(){
+  const btn = document.getElementById('refreshAllLimitsBtn');
+  const limits = [50, 100, 200, 300];
+  const market = getMarket();
+  const prevLimit = getLimit();
+  if(btn) btn.disabled = true;
+  try{
+    saveScorePref();
+    const qs = scoreQueryString();
+    for(let i=0;i<limits.length;i++){
+      const lim = limits[i];
+      const sel = document.getElementById('limitSelect');
+      if(sel) sel.value = String(lim);
+      saveLimitPref();
+
+      showProgress(`⏳ 전체 순차 조회 중... (${i+1}/${limits.length}) limit=${lim}`);
+      const r = await apiGet(`/api/report/refresh?market=${market}&limit=${lim}&${qs}&t=${Date.now()}`);
+      if(r.status==='running' || r.__status===202){
+        await waitReportReady(market, lim);
+      }
+    }
+
+    const sel = document.getElementById('limitSelect');
+    if(sel) sel.value = String(prevLimit);
+    saveLimitPref();
+    hideProgress();
+    showToast('전체 순차 조회 완료 (50→100→200→300)');
+    await loadData();
+  }catch(e){
+    showProgress(`❌ 전체 순차 조회 실패: ${e.message || e}`);
+    showToast(`전체 순차 조회 실패: ${e.message || e}`, true);
+  }finally{
+    if(btn) btn.disabled = false;
+  }
 }
 
 async function loadData(){
