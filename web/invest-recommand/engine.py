@@ -127,9 +127,84 @@ def reload_universe() -> Dict:
     return {"total": len(UNIVERSE), "us": us_n, "kr": kr_n}
 
 
+def _fix_mojibake_kr(text: str) -> str:
+    """UTF-8/EUC-KR 경계에서 깨진 한글을 최대한 복구한다.
+    예) '����' 형태가 들어오면 latin1 -> euc-kr/utf-8 역복호화를 시도.
+    """
+    if not text:
+        return text
+    # 대표 깨짐 패턴이 없으면 그대로 반환
+    if "�" not in text and "����" not in text:
+        return text
+
+    candidates = [text]
+    try:
+        raw = text.encode("latin1", "ignore")
+        for enc in ("euc-kr", "cp949", "utf-8"):
+            try:
+                candidates.append(raw.decode(enc, "ignore"))
+            except Exception:
+                pass
+    except Exception:
+        pass
+
+    def _score_ko(s: str) -> int:
+        # 한글/영문/숫자가 많고 U+FFFD(�)가 적을수록 점수 높음
+        good = sum(1 for ch in s if ("가" <= ch <= "힣") or ch.isalnum() or ch in " .,:;()[]/-_&%+?!")
+        bad = s.count("�") * 4
+        return good - bad
+
+    return max(candidates, key=_score_ko)
+
+
+def _decode_html_with_fallback(raw: bytes, hinted_encoding: str = "utf-8") -> str:
+    """HTML 바이트를 charset/meta 힌트 + 한글 사이트 fallback으로 디코딩."""
+    encs: List[str] = []
+    if hinted_encoding:
+        encs.append(hinted_encoding)
+
+    try:
+        head = raw[:4096].decode("ascii", "ignore").lower()
+        m = re.search(r"charset\s*=\s*['\"]?([a-z0-9\-]+)", head)
+        if m:
+            encs.append(m.group(1))
+    except Exception:
+        pass
+
+    # KR 사이트 fallback 우선순위
+    encs.extend(["utf-8", "euc-kr", "cp949", "latin1"])
+
+    seen = set()
+    ordered = []
+    for e in encs:
+        k = (e or "").lower()
+        if k and k not in seen:
+            seen.add(k)
+            ordered.append(k)
+
+    candidates: List[str] = []
+    for enc in ordered:
+        try:
+            txt = raw.decode(enc, "ignore")
+            candidates.append(_fix_mojibake_kr(txt))
+        except Exception:
+            continue
+
+    if not candidates:
+        return raw.decode("utf-8", "ignore")
+
+    def _score(s: str) -> int:
+        ko = sum(1 for ch in s if "가" <= ch <= "힣")
+        bad = s.count("�") * 5 + s.count("����")
+        return ko - bad
+
+    return max(candidates, key=_score)
+
+
 def _fetch_text(url: str, encoding: str = "utf-8") -> str:
     req = urllib.request.Request(url, headers={"User-Agent": "Mozilla/5.0"})
-    return urllib.request.urlopen(req, timeout=20).read().decode(encoding, "ignore")
+    raw = urllib.request.urlopen(req, timeout=20).read()
+    return _decode_html_with_fallback(raw, hinted_encoding=encoding)
 
 
 def _refresh_us_top300(base_dir: Path) -> int:
@@ -290,7 +365,7 @@ _CONS_TTL_SEC = 60 * 60 * 6  # 6h
 def _safe_fetch_text(url: str, encoding: str = "utf-8") -> str:
     req = urllib.request.Request(url, headers={"User-Agent": "Mozilla/5.0"})
     raw = urllib.request.urlopen(req, timeout=2.5).read()
-    return raw.decode(encoding, "ignore")
+    return _decode_html_with_fallback(raw, hinted_encoding=encoding)
 
 
 def _split_js_args(s: str) -> List[str]:
@@ -813,7 +888,11 @@ def _load_naver_theme_map() -> Dict[str, Dict]:
         theme_links = []
         for p in range(1, 8):
             html = _fetch(f"https://finance.naver.com/sise/theme.naver?&page={p}")
-            links = re.findall(r'href="(/sise/theme_detail\.naver\?no=\d+)"', html)
+
+            # 과거/현재 URL 형태 모두 허용
+            links = re.findall(r'href="(/sise/sise_group_detail\.naver\?type=theme&no=\d+)"', html)
+            links += re.findall(r'href="(/sise/theme_detail\.naver\?no=\d+)"', html)
+
             if not links:
                 continue
             for lk in links:
@@ -821,11 +900,16 @@ def _load_naver_theme_map() -> Dict[str, Dict]:
                     theme_links.append(lk)
 
         # each theme detail -> stock code mapping
-        for rel in theme_links[:400]:
+        for rel in theme_links[:500]:
             try:
                 detail = _fetch("https://finance.naver.com" + rel)
-                m_theme = re.search(r'<div class="h_company">\s*<h2>\s*([^<]+?)\s*</h2>', detail)
-                theme_name = m_theme.group(1).strip() if m_theme else None
+
+                # 상세 제목 우선, 없으면 sub title fallback
+                m_theme = (
+                    re.search(r'<strong class="info_title">\s*([^<]+?)\s*</strong>', detail)
+                    or re.search(r'<h3 class="sub_tlt">\s*([^<]+?)\s*</h3>', detail)
+                )
+                theme_name = _strip_tags(m_theme.group(1)).strip() if m_theme else None
                 if not theme_name:
                     continue
 
@@ -834,7 +918,7 @@ def _load_naver_theme_map() -> Dict[str, Dict]:
                     if not code6:
                         continue
                     rec = out.get(code6)
-                    cand = {"theme": theme_name, "name": nm.strip(), "source": "naver_theme"}
+                    cand = {"theme": theme_name, "name": _strip_tags(nm).strip(), "source": "naver_theme"}
                     if rec is None:
                         out[code6] = cand
             except Exception:
