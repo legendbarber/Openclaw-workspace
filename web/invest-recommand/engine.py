@@ -480,7 +480,8 @@ def _consensus_from_naver_or_hk(symbol: str, name: str | None = None) -> Dict:
                 "now_page": "1",
             })
         )
-        html = _safe_fetch_text(url, encoding="euc-kr")
+        # 한경 컨센서스 목록은 UTF-8 기준으로 파싱(한글 깨짐 방지)
+        html = _safe_fetch_text(url, encoding="utf-8")
 
         def _txt(x: str) -> str:
             x = re.sub(r"<[^>]+>", " ", x)
