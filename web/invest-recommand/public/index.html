@@ -62,16 +62,8 @@
 
     <div class="card">
       <b>점수식 설정</b>
-      <div class="tiny">기본: 종목점수:테마점수 = 6:4 (필요 시 포함 항목/가중치 직접 조정)</div>
-      <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-top:8px">
-        <label class="tiny">프리셋</label>
-        <select id="scorePreset" style="background:#374151;color:#fff;border:1px solid #4b5563;border-radius:8px;padding:6px 8px">
-          <option value="default_6_4">기본 6:4 (종목/테마)</option>
-          <option value="balanced">밸런스 5:3:1:1</option>
-          <option value="theme_focus">테마중심 4:5:0.5:0.5</option>
-        </select>
-        <button onclick="applyPreset()">프리셋 적용</button>
-      </div>
+      <div class="tiny">추천 점수식 비율(기본): 종목점수 6 : 테마점수 4</div>
+      <div class="tiny" style="margin-top:4px">아래에서 항목별 가중치를 직접 설정한 뒤 <b>적용</b> 버튼을 누르면 재계산됩니다.</div>
       <div class="score-grid">
         <div class="score-cell"><label><input type="checkbox" id="useStock" checked> 종목점수</label><br><input id="wStock" type="number" step="0.05" min="0" value="0.6"></div>
         <div class="score-cell"><label><input type="checkbox" id="useTheme" checked> 테마점수</label><br><input id="wTheme" type="number" step="0.05" min="0" value="0.4"></div>
@@ -80,6 +72,7 @@
         <div class="score-cell"><label>신뢰도(Conf) 반영</label><br><input id="wConfidence" type="number" step="0.01" min="0" max="0.5" value="0.10"></div>
         <div class="score-cell"><label>밸류갭 배율</label><br><input id="wValuation" type="number" step="0.05" min="0" value="0.20"></div>
       </div>
+      <div style="margin-top:10px"><button onclick="applyScoreSettings()">점수식 적용</button></div>
     </div>
 
     <div id="progressBox" class="card" style="display:none"></div>
@@ -156,27 +149,11 @@ function loadLimitPref(){
   if(sel) sel.value = String(v);
 }
 
-const SCORE_PRESETS = {
-  default_6_4: { stock:0.6, theme:0.4, news:0.0, technical:0.0, confidence:0.10, valuation:0.20 },
-  balanced: { stock:0.5, theme:0.3, news:0.1, technical:0.1, confidence:0.10, valuation:0.20 },
-  theme_focus: { stock:0.4, theme:0.5, news:0.05, technical:0.05, confidence:0.10, valuation:0.20 },
-};
+const SCORE_DEFAULTS = { wStock:0.6, wTheme:0.4, wNews:0.0, wTechnical:0.0, wConfidence:0.10, wValuation:0.20 };
 
-function applyPreset(){
-  const preset = document.getElementById('scorePreset')?.value || 'default_6_4';
-  const p = SCORE_PRESETS[preset] || SCORE_PRESETS.default_6_4;
-  document.getElementById('useStock').checked = p.stock > 0;
-  document.getElementById('useTheme').checked = p.theme > 0;
-  document.getElementById('useNews').checked = p.news > 0;
-  document.getElementById('useTechnical').checked = p.technical > 0;
-  document.getElementById('wStock').value = p.stock;
-  document.getElementById('wTheme').value = p.theme;
-  document.getElementById('wNews').value = p.news;
-  document.getElementById('wTechnical').value = p.technical;
-  document.getElementById('wConfidence').value = p.confidence;
-  document.getElementById('wValuation').value = p.valuation;
+async function applyScoreSettings(){
   saveScorePref();
-  refreshData();
+  await refreshData();
 }
 
 function getScoreConfig(){
@@ -186,7 +163,7 @@ function getScoreConfig(){
   };
   const asWeight = (useId, wId, dv=0)=> document.getElementById(useId)?.checked ? num(wId, dv) : 0;
   return {
-    preset: document.getElementById('scorePreset')?.value || 'default_6_4',
+    preset: 'default_6_4',
     wStock: asWeight('useStock','wStock',0.6),
     wTheme: asWeight('useTheme','wTheme',0.4),
     wNews: asWeight('useNews','wNews',0),
@@ -205,20 +182,29 @@ function loadScorePref(){
   const m = getMarket();
   try{
     const raw = localStorage.getItem(`invest_score_${m}`);
-    if(!raw){ applyPreset(); return; }
-    const c = JSON.parse(raw);
-    if(c.preset) document.getElementById('scorePreset').value = c.preset;
-    document.getElementById('wStock').value = c.wStock ?? 0.6;
-    document.getElementById('wTheme').value = c.wTheme ?? 0.4;
-    document.getElementById('wNews').value = c.wNews ?? 0;
-    document.getElementById('wTechnical').value = c.wTechnical ?? 0;
-    document.getElementById('wConfidence').value = c.wConfidence ?? 0.10;
-    document.getElementById('wValuation').value = c.wValuation ?? 0.20;
-    document.getElementById('useStock').checked = (Number(c.wStock)||0) > 0;
-    document.getElementById('useTheme').checked = (Number(c.wTheme)||0) > 0;
-    document.getElementById('useNews').checked = (Number(c.wNews)||0) > 0;
-    document.getElementById('useTechnical').checked = (Number(c.wTechnical)||0) > 0;
-  }catch(_){ applyPreset(); }
+    const c = raw ? JSON.parse(raw) : SCORE_DEFAULTS;
+    document.getElementById('wStock').value = c.wStock ?? SCORE_DEFAULTS.wStock;
+    document.getElementById('wTheme').value = c.wTheme ?? SCORE_DEFAULTS.wTheme;
+    document.getElementById('wNews').value = c.wNews ?? SCORE_DEFAULTS.wNews;
+    document.getElementById('wTechnical').value = c.wTechnical ?? SCORE_DEFAULTS.wTechnical;
+    document.getElementById('wConfidence').value = c.wConfidence ?? SCORE_DEFAULTS.wConfidence;
+    document.getElementById('wValuation').value = c.wValuation ?? SCORE_DEFAULTS.wValuation;
+    document.getElementById('useStock').checked = (Number(c.wStock ?? SCORE_DEFAULTS.wStock)||0) > 0;
+    document.getElementById('useTheme').checked = (Number(c.wTheme ?? SCORE_DEFAULTS.wTheme)||0) > 0;
+    document.getElementById('useNews').checked = (Number(c.wNews ?? SCORE_DEFAULTS.wNews)||0) > 0;
+    document.getElementById('useTechnical').checked = (Number(c.wTechnical ?? SCORE_DEFAULTS.wTechnical)||0) > 0;
+  }catch(_){
+    document.getElementById('wStock').value = SCORE_DEFAULTS.wStock;
+    document.getElementById('wTheme').value = SCORE_DEFAULTS.wTheme;
+    document.getElementById('wNews').value = SCORE_DEFAULTS.wNews;
+    document.getElementById('wTechnical').value = SCORE_DEFAULTS.wTechnical;
+    document.getElementById('wConfidence').value = SCORE_DEFAULTS.wConfidence;
+    document.getElementById('wValuation').value = SCORE_DEFAULTS.wValuation;
+    document.getElementById('useStock').checked = true;
+    document.getElementById('useTheme').checked = true;
+    document.getElementById('useNews').checked = false;
+    document.getElementById('useTechnical').checked = false;
+  }
 }
 
 function scoreQueryString(){
@@ -850,8 +836,6 @@ async function loadData(){
 setMarketHeader();
 loadLimitPref();
 loadScorePref();
-['scorePreset','useStock','useTheme','useNews','useTechnical','wStock','wTheme','wNews','wTechnical','wConfidence','wValuation']
-  .forEach(id => document.getElementById(id)?.addEventListener('change', saveScorePref));
 ensureServiceWorker();
 loadData();
 </script>
