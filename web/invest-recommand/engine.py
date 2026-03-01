@@ -944,9 +944,9 @@ def _normalize_score_config(score_config: Dict[str, Any] | None) -> Dict[str, An
 def _score_methodology_text(cfg: Dict[str, Any]) -> str:
     c = cfg.get("components", {})
     return (
-        "S=(1-conf)*Core+conf*Confidence+valuationAdj; "
+        "S=(1-conf)*Core+conf*Confidence; "
         f"Core={c.get('stock', 0):.2f}Stock+{c.get('theme', 0):.2f}Theme+{c.get('news', 0):.2f}News+{c.get('technical', 0):.2f}Technical; "
-        f"conf={cfg.get('confidence', 0):.2f}; valuationScale={cfg.get('valuation', 0):.2f}; "
+        f"conf={cfg.get('confidence', 0):.2f}; valuation=excluded; "
         "Technical=direction/cross/distance, KR theme=Naver theme, no clipping"
     )
 
@@ -1030,23 +1030,14 @@ def _apply_runtime_theme_scores(rows: List[Dict], score_config: Dict[str, Any] |
                 "confidence": round(float(conf), 2),
             }
 
-            # 밸류에이션 갭(목표가-현재가) 소폭 반영
+            # 사용자 요청: 현재가-목표가 괴리(valuation)는 종합점수에 반영하지 않음
             up = (r.get("components", {}).get("reportConsensus", {}) or {}).get("upsidePct")
-            if isinstance(up, (int, float)):
-                # 사용자 요청: 클리핑 없이 괴리율을 그대로 반영
-                valuation_adj = float(up) * float(cfg.get("valuation", 0.20))
-                final_score += valuation_adj
-                r.setdefault("components", {})["valuation"] = {
-                    "upsidePct": round(float(up), 2),
-                    "adjustment": round(float(valuation_adj), 2),
-                    "capRangePct": None,
-                }
-            else:
-                r.setdefault("components", {})["valuation"] = {
-                    "upsidePct": None,
-                    "adjustment": 0.0,
-                    "capRangePct": None,
-                }
+            r.setdefault("components", {})["valuation"] = {
+                "upsidePct": round(float(up), 2) if isinstance(up, (int, float)) else None,
+                "adjustment": 0.0,
+                "capRangePct": None,
+                "enabled": False,
+            }
 
             r["score"] = round(float(final_score), 2)
 
