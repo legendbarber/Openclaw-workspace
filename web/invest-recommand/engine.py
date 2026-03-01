@@ -947,7 +947,7 @@ def _score_methodology_text(cfg: Dict[str, Any]) -> str:
         "S=(1-conf)*Core+conf*Confidence+valuationAdj; "
         f"Core={c.get('stock', 0):.2f}Stock+{c.get('theme', 0):.2f}Theme+{c.get('news', 0):.2f}News+{c.get('technical', 0):.2f}Technical; "
         f"conf={cfg.get('confidence', 0):.2f}; valuationScale={cfg.get('valuation', 0):.2f}; "
-        "Technical=direction/cross/distance, KR theme=Naver theme"
+        "Technical=direction/cross/distance, KR theme=Naver theme, no clipping"
     )
 
 
@@ -986,7 +986,7 @@ def _apply_runtime_theme_scores(rows: List[Dict], score_config: Dict[str, Any] |
         tech_avg = float(np.mean([float((x.get("components", {}).get("technical", {}) or {}).get("score", 50.0)) for x in arr]))
         news_avg = float(np.mean([float((x.get("components", {}).get("crowd", {}) or {}).get("score", 50.0)) for x in arr]))
         breadth = np.clip((len(arr) / 10.0) * 100, 0, 100)
-        theme_score = float(np.clip(0.5 * base_avg + 0.2 * tech_avg + 0.2 * news_avg + 0.1 * breadth, 0, 100))
+        theme_score = float(0.5 * base_avg + 0.2 * tech_avg + 0.2 * news_avg + 0.1 * breadth)
         theme_scores[t] = theme_score
 
     # 3) 종목별 리더점수(해당 테마 내 상대강도) + 최종 점수 재보정
@@ -999,7 +999,7 @@ def _apply_runtime_theme_scores(rows: List[Dict], score_config: Dict[str, Any] |
             th.update({
                 "themeScore": round(theme_scores[t], 2),
                 "leaderScore": round(leader, 2),
-                "score": round(float(np.clip(0.7 * theme_scores[t] + 0.3 * leader, 0, 100)), 2),
+                "score": round(float(0.7 * theme_scores[t] + 0.3 * leader), 2),
                 "matched": t != "UNKNOWN",
             })
             r["components"]["theme"] = th
@@ -1033,22 +1033,22 @@ def _apply_runtime_theme_scores(rows: List[Dict], score_config: Dict[str, Any] |
             # 밸류에이션 갭(목표가-현재가) 소폭 반영
             up = (r.get("components", {}).get("reportConsensus", {}) or {}).get("upsidePct")
             if isinstance(up, (int, float)):
-                # 과도한 왜곡 방지를 위해 캡 적용: -20%~+40%를 -4~+8점으로 반영
-                valuation_adj = float(np.clip(up, -20, 40)) * float(cfg.get("valuation", 0.20))
+                # 사용자 요청: 클리핑 없이 괴리율을 그대로 반영
+                valuation_adj = float(up) * float(cfg.get("valuation", 0.20))
                 final_score += valuation_adj
                 r.setdefault("components", {})["valuation"] = {
                     "upsidePct": round(float(up), 2),
                     "adjustment": round(float(valuation_adj), 2),
-                    "capRangePct": [-20, 40],
+                    "capRangePct": None,
                 }
             else:
                 r.setdefault("components", {})["valuation"] = {
                     "upsidePct": None,
                     "adjustment": 0.0,
-                    "capRangePct": [-20, 40],
+                    "capRangePct": None,
                 }
 
-            r["score"] = round(float(np.clip(final_score, 0, 100)), 2)
+            r["score"] = round(float(final_score), 2)
 
     return rows
 
