@@ -232,6 +232,20 @@ function recommendationFormulaText(item){
   const fs = (n)=> Number(n||0).toFixed(2);
   return `추천 점수식: 종합점수 = (${fs(c?.scoreMix?.stockWeight)}×종목 ${fs(item?.scoreBase)} + ${fs(c?.scoreMix?.themeWeight)}×테마 ${fs(c?.theme?.score)} + ${fs(c?.scoreMix?.newsWeight)}×뉴스 ${fs(c?.crowd?.score)} + ${fs(c?.scoreMix?.technicalWeight)}×기술 ${fs(c?.technical?.score)}) + 신뢰도/밸류갭 보정`;
 }
+
+function representativeReportHtml(item){
+  const links = item?.components?.reportConsensus?.reportLinks;
+  if(!Array.isArray(links) || !links.length) return '대표 리포트: -';
+  const rep = links[0] || {};
+  const date = rep.date || '-';
+  const broker = rep.broker || '-';
+  const tp = rep.targetPrice;
+  const tpTxt = (tp===null || tp===undefined || Number.isNaN(Number(tp))) ? '-' : fmt(tp);
+  const title = rep.title || '-';
+  const url = rep.url || '#';
+  const safeTitle = String(title).replace(/</g,'&lt;').replace(/>/g,'&gt;');
+  return `대표 리포트: ${date} · ${broker} · 목표가: ${tpTxt} · ${safeTitle} <a href='${url}' target='_blank' rel='noopener noreferrer'>리포트 원문</a>`;
+}
 function setLoading(on){
   const el=document.getElementById('topLoader');
   if(!el) return;
@@ -881,8 +895,6 @@ async function loadData(){
   document.getElementById('scoreTop5').innerHTML = `
     <div class='card' style='grid-column:1/-1'><b>📌 종합점수 상위 30 (점수순)</b></div>
   ` + scoreTop30.map((r, idx) => {
-    const lossPct = pctFrom(r.currentPrice, r.plan.stopLoss);
-    const profitPct = pctFrom(r.currentPrice, r.plan.takeProfit1);
     return `
     <div class='card'>
       <div style='display:flex;align-items:flex-start;justify-content:space-between;gap:8px;flex-wrap:wrap'>
@@ -895,12 +907,7 @@ async function loadData(){
       <span class='tiny'>${recommendationFormulaText(r)}</span><br>
       목표주가 컨센서스: ${fmt(r.components?.reportConsensus?.targetMeanPrice)} (${fmtPct(r.components?.reportConsensus?.upsidePct)})<br>
       <b>컨센서스:</b> 점수 ${fmt(r.components?.reportConsensus?.score)} / 의견수 ${fmt(r.components?.reportConsensus?.analystOpinions,0)} / 소스 ${r.components?.reportConsensus?.source || '-'}<br>
-      <b>설명:</b> ${productDesc(r.symbol, r.name, r.category)}<br>
-      진입: ${fmt(r.plan.entryZone[0])}~${fmt(r.plan.entryZone[1])}<br>
-      손절: ${fmt(r.plan.stopLoss)} / 익절1: ${fmt(r.plan.takeProfit1)}<br>
-      <b>예상 손실률:</b> ${fmtPct(lossPct)} / <b>예상 수익률:</b> ${fmtPct(profitPct)}<br>
-      <b>RR(기대수익/위험):</b> ${fmt(r.riskReward || (profitPct && lossPct ? (profitPct/Math.abs(lossPct)) : null))}<br>
-      <b>수익률 평가 시점:</b> ${expectedHorizon(r.plan.ttlTradingDays)}<br>
+      <span class='tiny'>${representativeReportHtml(r)}</span><br>
       <b>미니 차트 (3개월):</b><br><div id='score-mini-${idx}' style='height:190px;min-height:190px;margin-top:6px;background:#0f172a;border:1px solid #24304f;border-radius:8px;padding:4px;box-sizing:border-box;overflow:hidden;'></div><br>
     </div>
   `}).join('');
