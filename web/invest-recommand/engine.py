@@ -396,13 +396,23 @@ def _recommendation_to_score(rec: str | None) -> float | None:
     if not rec:
         return None
     r = rec.strip().lower()
-    if "strong buy" in r:
+
+    # KR labels
+    if "매수" in r:
+        return 2.0
+    if "중립" in r or "보유" in r:
+        return 3.0
+    if "매도" in r:
+        return 4.0
+
+    # EN labels
+    if "strong buy" in r or "outperform" in r:
         return 1.0
     if "buy" in r:
         return 2.0
     if "hold" in r or "neutral" in r:
         return 3.0
-    if "sell" in r:
+    if "sell" in r or "underperform" in r:
         return 4.0
     return None
 
@@ -411,11 +421,21 @@ def _recommendation_bucket(rec: str | None) -> str | None:
     if not rec:
         return None
     r = rec.strip().lower()
-    if "strong buy" in r or ("buy" in r and "sell" not in r):
+
+    # KR labels
+    if "매수" in r:
+        return "buy"
+    if "중립" in r or "보유" in r:
+        return "hold"
+    if "매도" in r:
+        return "sell"
+
+    # EN labels
+    if "strong buy" in r or "outperform" in r or ("buy" in r and "sell" not in r):
         return "buy"
     if "hold" in r or "neutral" in r:
         return "hold"
-    if "sell" in r:
+    if "sell" in r or "underperform" in r:
         return "sell"
     return None
 
