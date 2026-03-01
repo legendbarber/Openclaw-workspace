@@ -296,7 +296,7 @@ function attachArchiveDeleteHandlers(){
 }
 
 async function refreshArchiveChartBySymbol(symbol){
-  const res=await fetch(`/api/archive/${encodeURIComponent(symbol)}/chart/refresh`,{method:'POST'});
+  const res=await fetch(`/api/archive/${encodeURIComponent(symbol)}/chart/refresh?period=1y&interval=1d`,{method:'POST'});
   const data=await res.json().catch(()=>({}));
   if(!res.ok){
     throw new Error(data?.error||data?.message||'차트 갱신 실패');

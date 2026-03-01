@@ -727,7 +727,7 @@ def api_archive_save():
         'components': item.get('components') or {},
         'links': item.get('links') or {},
     }
-    chart_period = str(payload.get('chartPeriod') or '6mo')
+    chart_period = str(payload.get('chartPeriod') or '1y')
     chart_interval = str(payload.get('chartInterval') or '1d')
     chart, chart_status = _fetch_chart_data(symbol, chart_period, chart_interval, True)
     entry['chart'] = chart
@@ -757,7 +757,7 @@ def api_archive_chart_refresh(symbol: str):
     item = get_archived_pick(symbol)
     if not item:
         return jsonify({'ok': False, 'error': 'not_found'}), 404
-    period = request.args.get('period') or item.get('chartPeriod') or '6mo'
+    period = request.args.get('period') or item.get('chartPeriod') or '1y'
     interval = request.args.get('interval') or item.get('chartInterval') or '1d'
     chart, status = _fetch_chart_data(symbol, period, interval, True)
     updated = item.copy()
