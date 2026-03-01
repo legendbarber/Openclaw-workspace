@@ -119,7 +119,16 @@ function renderCandleChart(target, chart){
   const x = (i)=> left + (i/(N-1||1))*plotW;
   const y = (v)=> top + (1-((v-min)/span))*plotH;
 
-  const maPath = (arr)=> arr.map((v,i)=>Number.isFinite(v)?`${i===0?'M':'L'}${x(i).toFixed(2)} ${y(v).toFixed(2)}`:'').filter(Boolean).join(' ');
+  const maPath = (arr)=>{
+    const pts=[];
+    for(let i=0;i<arr.length;i++){
+      const v = arr[i];
+      if(!Number.isFinite(v)) continue;
+      pts.push({i, v});
+    }
+    if(!pts.length) return '';
+    return pts.map((p, idx)=>`${idx===0?'M':'L'}${x(p.i).toFixed(2)} ${y(p.v).toFixed(2)}`).join(' ');
+  };
 
   const candleW = Math.max(2, Math.floor(plotW/N*0.65));
   const candles = open.map((o,i)=>{
@@ -167,8 +176,7 @@ function renderCandleChart(target, chart){
   const showTooltip = (evt, i)=>{
     if(i<0 || i>=labels.length) return;
     const d = labels[i] || '-';
-    const txt = `${d} | O ${fmt(open[i])} H ${fmt(high[i])} L ${fmt(low[i])} C ${fmt(close[i])}`;
-    tooltip.textContent = txt;
+    tooltip.textContent = d;
     tooltip.style.display='block';
     const wrapRect = wrapper.getBoundingClientRect();
     const tipRect = tooltip.getBoundingClientRect();
