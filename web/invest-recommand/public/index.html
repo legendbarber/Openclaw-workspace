@@ -385,9 +385,9 @@ function hideProgress(){
   el.innerHTML = '';
 }
 
-async function waitReportReady(market, limit){
+async function waitReportReady(market, limit, qs, maxWaitMs=25*60*1000){
+  const started = Date.now();
   while(true){
-    const qs = scoreQueryString();
     const p = await apiGet(`/api/report/progress?market=${market}&limit=${limit}&${qs}&t=${Date.now()}`);
     if(p.status==='done'){
       hideProgress();
@@ -405,7 +405,19 @@ async function waitReportReady(market, limit){
       const sym = pr.symbol || '-';
       showProgress(`⏳ 분석 중... ${done}/${total} (${pct}%) · 현재 ${sym}`);
     } else {
+      // running 상태를 놓친 경우를 대비: 실제 report가 있으면 완료로 간주
+      try{
+        const r = await apiGet(`/api/report?market=${market}&limit=${limit}&${qs}&t=${Date.now()}`);
+        if(r && !r.status && Array.isArray(r.rankings)){
+          hideProgress();
+          return;
+        }
+      }catch(_){/* noop */}
       showProgress('⏳ 분석 준비 중...');
+    }
+
+    if(Date.now() - started > maxWaitMs){
+      throw new Error(`timeout_limit_${limit}`);
     }
     await new Promise(r=>setTimeout(r, 1200));
   }
@@ -682,7 +694,7 @@ async function refreshData(){
   if(r.status==='running' || r.__status===202){
     const pr = r.progress || {};
     showProgress(`⏳ 분석 시작... ${pr.done ?? 0}/${pr.total ?? 0} (${pr.progressPct ?? 0}%)`);
-    await waitReportReady(market, limit);
+    await waitReportReady(market, limit, qs);
     await loadData();
     return;
   }
@@ -695,6 +707,7 @@ async function refreshAllLimits(){
   const market = getMarket();
   const prevLimit = getLimit();
   if(btn) btn.disabled = true;
+  const results = [];
   try{
     saveScorePref();
     const qs = scoreQueryString();
@@ -705,9 +718,20 @@ async function refreshAllLimits(){
       saveLimitPref();
 
       showProgress(`⏳ 전체 순차 조회 중... (${i+1}/${limits.length}) limit=${lim}`);
-      const r = await apiGet(`/api/report/refresh?market=${market}&limit=${lim}&${qs}&t=${Date.now()}`);
-      if(r.status==='running' || r.__status===202){
-        await waitReportReady(market, lim);
+      try{
+        const r = await apiGet(`/api/report/refresh?market=${market}&limit=${lim}&${qs}&t=${Date.now()}`);
+        if(r.status==='running' || r.__status===202){
+          await waitReportReady(market, lim, qs);
+        }
+        // 최종 report 존재 확인
+        const chk = await apiGet(`/api/report?market=${market}&limit=${lim}&${qs}&t=${Date.now()}`);
+        if(chk && !chk.status && Array.isArray(chk.rankings)){
+          results.push({limit: lim, ok: true});
+        }else{
+          results.push({limit: lim, ok: false, msg: 'no_report'});
+        }
+      }catch(err){
+        results.push({limit: lim, ok: false, msg: err?.message || String(err)});
       }
     }
 
@@ -715,7 +739,15 @@ async function refreshAllLimits(){
     if(sel) sel.value = String(prevLimit);
     saveLimitPref();
     hideProgress();
-    showToast('전체 순차 조회 완료 (50→100→200→300)');
+
+    const ok = results.filter(x=>x.ok).length;
+    const fail = results.length - ok;
+    const failTxt = results.filter(x=>!x.ok).map(x=>`${x.limit}:${x.msg}`).join(', ');
+    if(fail===0){
+      showToast('전체 순차 조회 완료 (50→100→200→300)');
+    }else{
+      showToast(`부분 실패 · 성공 ${ok}/4 · 실패 ${fail} (${failTxt})`, true);
+    }
     await loadData();
   }catch(e){
     showProgress(`❌ 전체 순차 조회 실패: ${e.message || e}`);
@@ -740,7 +772,7 @@ async function loadData(){
   if(d.status==='running' || d.__status===202){
     const pr = d.progress || {};
     showProgress(`⏳ 분석 중... ${pr.done ?? 0}/${pr.total ?? 0} (${pr.progressPct ?? 0}%)`);
-    await waitReportReady(market, limit);
+    await waitReportReady(market, limit, qs);
     d = await apiGet(`/api/report?market=${market}&limit=${limit}&${qs}&t=${Date.now()}`);
   }
 
