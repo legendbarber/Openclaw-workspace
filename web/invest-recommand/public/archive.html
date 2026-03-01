@@ -41,6 +41,7 @@
       </div>
       <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;justify-content:flex-end">
         <a class="button" href="/invest-recommend">현장 뷰</a>
+        <button id="refreshAllCharts" type="button">차트 전체 갱신</button>
         <button id="refreshArchive" type="button">새로 고침</button>
       </div>
     </div>
@@ -294,6 +295,15 @@ function attachArchiveDeleteHandlers(){
   });
 }
 
+async function refreshArchiveChartBySymbol(symbol){
+  const res=await fetch(`/api/archive/${encodeURIComponent(symbol)}/chart/refresh`,{method:'POST'});
+  const data=await res.json().catch(()=>({}));
+  if(!res.ok){
+    throw new Error(data?.error||data?.message||'차트 갱신 실패');
+  }
+  return data;
+}
+
 function attachArchiveChartHandlers(){
   document.querySelectorAll('.archive-chart-refresh').forEach(btn=>{
     btn.onclick=async()=>{
@@ -302,11 +312,7 @@ function attachArchiveChartHandlers(){
       btn.disabled=true;
       showToast(`${symbol} 차트 갱신 중...`);
       try{
-        const res=await fetch(`/api/archive/${encodeURIComponent(symbol)}/chart/refresh`,{method:'POST'});
-        const data=await res.json().catch(()=>({}));
-        if(!res.ok){
-          throw new Error(data?.error||data?.message||'차트 갱신 실패');
-        }
+        await refreshArchiveChartBySymbol(symbol);
         showToast(`${symbol} 차트 갱신 완료`);
         await loadArchive();
       }catch(err){
@@ -317,6 +323,33 @@ function attachArchiveChartHandlers(){
     };
   });
 }
+
+document.getElementById('refreshAllCharts')?.addEventListener('click', async (e)=>{
+  const btn = e.currentTarget;
+  const items = Array.from(document.querySelectorAll('.archive-chart-refresh[data-symbol]')).map(x=>x.dataset.symbol).filter(Boolean);
+  if(!items.length){
+    showToast('갱신할 아카이브 종목이 없습니다.', true);
+    return;
+  }
+  btn.disabled = true;
+  try{
+    let ok=0, fail=0;
+    for(let i=0;i<items.length;i++){
+      const s = items[i];
+      showToast(`전체 갱신 중... (${i+1}/${items.length}) ${s}`);
+      try{
+        await refreshArchiveChartBySymbol(s);
+        ok++;
+      }catch(_){
+        fail++;
+      }
+    }
+    await loadArchive();
+    showToast(`전체 갱신 완료 · 성공 ${ok} / 실패 ${fail}`, fail>0);
+  }finally{
+    btn.disabled = false;
+  }
+});
 
 document.getElementById('refreshArchive')?.addEventListener('click', loadArchive);
 loadArchive();
