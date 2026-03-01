@@ -673,10 +673,10 @@ def _consensus_from_naver_or_hk(symbol: str, name: str | None = None) -> Dict:
         sample_n = max(len(used_brokers), len(targets), len(recs))
         score = 50.0
         if isinstance(mean_w, (int, float)):
-            score += float(np.clip((3.2 - mean_w) * 10, -15, 20))
+            score += float((3.2 - mean_w) * 10)
         dist_raw = 0.7 * (buy_ratio_w - sell_ratio_w) + 0.3 * (buy_ratio - sell_ratio)
-        score += float(np.clip(dist_raw * 25, -15, 25))
-        score += float(np.clip(sample_n * 3.0, 0, 20))
+        score += float(dist_raw * 25)
+        score += float(sample_n * 3.0)
 
         return {
             "targetMeanPrice": None if target is None else round(target, 2),
@@ -688,8 +688,8 @@ def _consensus_from_naver_or_hk(symbol: str, name: str | None = None) -> Dict:
             "freshnessBonus": 0.0,
             "reportLinks": hk_reports,
             "source": "hankyung_consensus+yf_target_fallback" if target_fallback else "hankyung_consensus",
-            "confidence": round(float(np.clip((sample_n / 6) * 100, 0, 100)), 2),
-            "score": round(float(np.clip(score, 0, 100)), 2),
+            "confidence": round(float((sample_n / 6) * 100), 2),
+            "score": round(float(score), 2),
         }
     except Exception:
         return {
@@ -727,15 +727,15 @@ def _consensus_from_yfinance(symbol: str) -> Dict:
         score = 50.0
         # 업사이드는 점수에서 제외: 투자의견 방향 + 표본 수만 반영
         if isinstance(mean, (int, float)):
-            score += float(np.clip((3.2 - mean) * 10, -15, 20))
+            score += float((3.2 - mean) * 10)
 
         buy_ratio = 1.0 if b["buy"] else 0.0
         sell_ratio = 1.0 if b["sell"] else 0.0
-        score += float(np.clip((buy_ratio - sell_ratio) * 10, -10, 10))
+        score += float((buy_ratio - sell_ratio) * 10)
 
         if isinstance(n, (int, float)):
             # 표본 수 가중 강화
-            score += float(np.clip(n * 1.2, 0, 20))
+            score += float(n * 1.2)
 
         return {
             "targetMeanPrice": target,
@@ -746,8 +746,8 @@ def _consensus_from_yfinance(symbol: str) -> Dict:
             "opinionDistribution": b,
             "reportLinks": [],
             "source": "yfinance",
-            "confidence": round(float(np.clip(((float(n) if isinstance(n, (int, float)) else 0.0) / 20.0) * 100, 0, 100)), 2),
-            "score": round(float(np.clip(score, 0, 100)), 2),
+            "confidence": round(float(((float(n) if isinstance(n, (int, float)) else 0.0) / 20.0) * 100), 2),
+            "score": round(float(score), 2),
         }
     except Exception:
         return {
@@ -986,7 +986,7 @@ def _apply_runtime_theme_scores(rows: List[Dict], score_config: Dict[str, Any] |
         base_avg = float(np.mean([float(x.get("scoreBase", x.get("score", 50.0))) for x in arr]))
         tech_avg = float(np.mean([float((x.get("components", {}).get("technical", {}) or {}).get("score", 50.0)) for x in arr]))
         news_avg = float(np.mean([float((x.get("components", {}).get("crowd", {}) or {}).get("score", 50.0)) for x in arr]))
-        breadth = np.clip((len(arr) / 10.0) * 100, 0, 100)
+        breadth = (len(arr) / 10.0) * 100
         theme_score = float(0.5 * base_avg + 0.2 * tech_avg + 0.2 * news_avg + 0.1 * breadth)
         theme_scores[t] = theme_score
 
@@ -995,7 +995,7 @@ def _apply_runtime_theme_scores(rows: List[Dict], score_config: Dict[str, Any] |
         arr_sorted = sorted(arr, key=lambda x: float(x.get("scoreBase", x.get("score", 50.0))), reverse=True)
         n = len(arr_sorted)
         for i, r in enumerate(arr_sorted):
-            leader = 100.0 if n <= 1 else float(np.clip(100 - (i / (n - 1)) * 35, 65, 100))
+            leader = 100.0 if n <= 1 else float(100 - (i / (n - 1)) * 35)
             th = r.get("components", {}).get("theme", {})
             th.update({
                 "themeScore": round(theme_scores[t], 2),
@@ -1017,7 +1017,7 @@ def _apply_runtime_theme_scores(rows: List[Dict], score_config: Dict[str, Any] |
                 + float(w.get("news", 0.0)) * news_s
                 + float(w.get("technical", 0.0)) * tech_s
             )
-            conf_w = float(np.clip(cfg.get("confidence", 0.10), 0.0, 0.50))
+            conf_w = float(max(0.0, cfg.get("confidence", 0.10)))
             final_score = (1.0 - conf_w) * core + conf_w * conf
 
             r.setdefault("components", {})["scoreMix"] = {
@@ -1068,7 +1068,7 @@ def _news(symbol: str, name: str, limit: int = 8) -> Dict:
             tone += sum(1 for w in POSITIVE if w in lo)
             tone -= sum(1 for w in NEGATIVE if w in lo)
 
-        score = float(np.clip(50 + tone * 6 + len(titles) * 1.2, 0, 100))
+        score = float(50 + tone * 6 + len(titles) * 1.2)
         return {
             "headlineCount": len(titles),
             "tone": tone,
@@ -1089,7 +1089,7 @@ def _momentum_score(s: pd.Series) -> Dict:
     cur = float(s.iloc[-1])
     trend_boost = 10 if (cur > ma20 and ma20 > ma60) else (-8 if cur < ma20 else 0)
     raw = m1 * 0.35 + m3 * 0.4 + m6 * 0.25 + trend_boost
-    score = float(np.clip(50 + raw, 0, 100))
+    score = float(50 + raw)
     return {
         "m1Pct": round(m1, 2),
         "m3Pct": round(m3, 2),
@@ -1103,7 +1103,7 @@ def _liquidity_score(symbol: str) -> float:
     try:
         q = yf.Ticker(symbol).fast_info
         avg_vol = q.get("threeMonthAverageVolume") or q.get("tenDayAverageVolume") or 0
-        score = np.clip(np.log10(max(float(avg_vol), 1.0)) * 13, 0, 100)
+        score = np.log10(max(float(avg_vol), 1.0)) * 13
         return round(float(score), 2)
     except Exception:
         return 50.0
@@ -1122,7 +1122,7 @@ def _risk_score(s: pd.Series) -> Dict:
         vol_component = max(20, 95 - (v - 45) * 2.2)
 
     dd_penalty = max(0, dd - 38) * 1.6
-    score = float(np.clip(vol_component - dd_penalty, 0, 100))
+    score = float(vol_component - dd_penalty)
     return {"volPct": round(v, 2), "maxDrawdownPct": round(dd, 2), "score": round(score, 2)}
 
 
@@ -1210,7 +1210,7 @@ def evaluate_asset(asset: Asset) -> Dict | None:
 
     # 데이터 품질 기반 신뢰도
     r_conf = float(report_consensus.get("confidence", 50.0) or 0.0)
-    c_conf = float(np.clip(((crowd.get("headlineCount", 0) or 0) / 8.0) * 100, 0, 100))
+    c_conf = float(((crowd.get("headlineCount", 0) or 0) / 8.0) * 100)
     t_setup = technical.get("setup")
     if t_setup == "adjustment-zone":
         t_conf = 85.0
