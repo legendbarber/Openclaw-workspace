@@ -17,7 +17,7 @@
     .top-loader{position:fixed;top:0;left:0;right:0;height:3px;background:transparent;z-index:9999;overflow:hidden;display:none}
     .top-loader .bar{position:absolute;height:100%;width:28%;background:#9ca3af;animation:slide 1.1s linear infinite;border-radius:999px}
     @keyframes slide{0%{left:-30%}100%{left:100%}}
-    .chart-pane{height:190px;min-height:190px;margin-top:8px;background:#0f172a;border:1px solid #24304f;border-radius:10px;padding:4px;box-sizing:border-box;overflow:hidden}
+    .chart-pane{height:230px;min-height:230px;margin-top:8px;background:#0f172a;border:1px solid #24304f;border-radius:10px;padding:4px;box-sizing:border-box;overflow:hidden}
     .archive-chart-refresh{background:#10b981;border:none;color:#fff;padding:6px 12px;border-radius:8px;font-size:12px;font-weight:600;cursor:pointer;transition:opacity .2s ease}
     .archive-chart-refresh:hover{opacity:.85}
     .archive-card{position:relative}
@@ -68,26 +68,85 @@ function expectedHorizon(ttlTradingDays){const d=Number(ttlTradingDays); if(!Num
 function symbolId(symbol){return `archive-chart-${(symbol||'').replace(/[^a-zA-Z0-9_-]/g,'_')}`;}
 function detailLink(symbol){return `<a href='/invest-recommend/symbol/${encodeURIComponent(symbol)}' title='추천근거 상세'>🔎 근거 상세</a>`;}
 
-function renderSparkline(target,chart){
+function movingAvg(arr, period){
+  const out=[];
+  let sum=0;
+  for(let i=0;i<arr.length;i++){
+    const v=Number(arr[i]);
+    if(!Number.isFinite(v)){ out.push(null); continue; }
+    sum += v;
+    if(i>=period){
+      const old=Number(arr[i-period]);
+      if(Number.isFinite(old)) sum -= old;
+    }
+    out.push(i>=period-1 ? (sum/period) : null);
+  }
+  return out;
+}
+
+function renderCandleChart(target, chart){
   if(!target) return;
   target.innerHTML='';
   if(!chart||!chart.ok||!Array.isArray(chart.close)||!chart.close.length){
-    target.innerHTML="<div class='tiny' style='line-height:150px;text-align:center;'>차트 데이터 없음</div>";
+    target.innerHTML="<div class='tiny' style='line-height:190px;text-align:center;'>차트 데이터 없음</div>";
     return;
   }
-  const closes=chart.close.map(v=>Number(v)).filter(v=>Number.isFinite(v));
-  if(!closes.length){
-    target.innerHTML="<div class='tiny' style='line-height:150px;text-align:center;'>차트 데이터 없음</div>";
+  const N=Math.min(chart.close.length, 120);
+  const start=chart.close.length-N;
+  const labels=(chart.labels||[]).slice(start);
+  const open=(chart.open||[]).slice(start).map(Number);
+  const high=(chart.high||[]).slice(start).map(Number);
+  const low=(chart.low||[]).slice(start).map(Number);
+  const close=(chart.close||[]).slice(start).map(Number);
+  if(!open.length||!high.length||!low.length||!close.length){
+    target.innerHTML="<div class='tiny' style='line-height:190px;text-align:center;'>차트 데이터 없음</div>";
     return;
   }
-  const width=360,height=140,padding=12;
-  const min=Math.min(...closes),max=Math.max(...closes),span=max-min||1;
-  const points=closes.map((val,idx)=>{
-    const x=padding+((idx/(closes.length-1||1))*(width-padding*2));
-    const y=height-padding-((val-min)/span)*(height-padding*2);
-    return `${x.toFixed(2)},${y.toFixed(2)}`;
-  }).join(' ');
-  target.innerHTML=`<svg viewBox='0 0 ${width} ${height}' width='100%' height='150'><polyline fill='none' stroke='#38bdf8' stroke-width='2' points='${points}'/></svg>`;
+
+  const ma20 = movingAvg(close, 20);
+  const ma60 = movingAvg(close, 60);
+  const min = Math.min(...low.filter(Number.isFinite));
+  const max = Math.max(...high.filter(Number.isFinite));
+  const span = (max-min) || 1;
+
+  const width=720, height=200, left=36, right=12, top=8, bottom=24;
+  const plotW = width-left-right;
+  const plotH = height-top-bottom;
+  const x = (i)=> left + (i/(N-1||1))*plotW;
+  const y = (v)=> top + (1-((v-min)/span))*plotH;
+
+  const maPath = (arr)=> arr.map((v,i)=>Number.isFinite(v)?`${i===0?'M':'L'}${x(i).toFixed(2)} ${y(v).toFixed(2)}`:'').filter(Boolean).join(' ');
+
+  const candleW = Math.max(2, Math.floor(plotW/N*0.65));
+  const candles = open.map((o,i)=>{
+    const h=high[i], l=low[i], c=close[i];
+    if(![o,h,l,c].every(Number.isFinite)) return '';
+    const up = c>=o;
+    const color = up ? '#22c55e' : '#ef4444';
+    const xi = x(i);
+    const yo = y(o), yc = y(c), yh = y(h), yl = y(l);
+    const bodyY = Math.min(yo,yc);
+    const bodyH = Math.max(1, Math.abs(yc-yo));
+    const date = labels[i] || '';
+    return `<g><title>${date}\nO:${o.toFixed(2)} H:${h.toFixed(2)} L:${l.toFixed(2)} C:${c.toFixed(2)}</title><line x1='${xi.toFixed(2)}' y1='${yh.toFixed(2)}' x2='${xi.toFixed(2)}' y2='${yl.toFixed(2)}' stroke='${color}' stroke-width='1'/><rect x='${(xi-candleW/2).toFixed(2)}' y='${bodyY.toFixed(2)}' width='${candleW}' height='${bodyH.toFixed(2)}' fill='${up?'rgba(34,197,94,0.75)':'rgba(239,68,68,0.75)'}' stroke='${color}' stroke-width='1'/></g>`;
+  }).join('');
+
+  const tickIdx = [0, Math.floor((N-1)/2), N-1];
+  const ticks = tickIdx.map(i=>`<text x='${x(i).toFixed(2)}' y='${(height-6)}' fill='#94a3b8' font-size='10' text-anchor='middle'>${(labels[i]||'').slice(2)}</text>`).join('');
+
+  target.innerHTML = `
+    <svg viewBox='0 0 ${width} ${height}' width='100%' height='200'>
+      <rect x='0' y='0' width='${width}' height='${height}' fill='transparent'/>
+      <line x1='${left}' y1='${y(max).toFixed(2)}' x2='${width-right}' y2='${y(max).toFixed(2)}' stroke='#23324f' stroke-width='1'/>
+      <line x1='${left}' y1='${y((max+min)/2).toFixed(2)}' x2='${width-right}' y2='${y((max+min)/2).toFixed(2)}' stroke='#23324f' stroke-width='1'/>
+      <line x1='${left}' y1='${y(min).toFixed(2)}' x2='${width-right}' y2='${y(min).toFixed(2)}' stroke='#23324f' stroke-width='1'/>
+      ${candles}
+      <path d='${maPath(ma20)}' fill='none' stroke='#f59e0b' stroke-width='1.6'/>
+      <path d='${maPath(ma60)}' fill='none' stroke='#60a5fa' stroke-width='1.6'/>
+      ${ticks}
+    </svg>
+    <div class='tiny' style='margin-top:2px'>캔들 · MA20(주황) · MA60(하늘)</div>
+  `;
 }
 
 async function loadArchive(){
@@ -142,7 +201,7 @@ async function loadArchive(){
       </div>
       `;
     }).join('')}</div>`;
-    items.forEach(it=>renderSparkline(document.getElementById(symbolId(it.symbol)), it.chart));
+    items.forEach(it=>renderCandleChart(document.getElementById(symbolId(it.symbol)), it.chart));
     attachArchiveChartHandlers();
     attachArchiveDeleteHandlers();
   }catch(err){
