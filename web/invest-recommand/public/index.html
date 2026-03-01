@@ -573,7 +573,7 @@ async function renderMiniChart(symbol, elId, force=false){
       const label = labels[i] || '';
       const safeLabel = label.replace(/"/g,'&quot;').replace(/'/g,'&#39;');
       const closeVal = Number.isFinite(c[i]) ? c[i] : null;
-      pointerOverlays.push(`<rect x='${pointerX.toFixed(2)}' y='${pointerY.toFixed(2)}' width='${pointerWidth.toFixed(2)}' height='${pointerHeight.toFixed(2)}' fill='transparent' data-date='${safeLabel}' data-price='${closeVal !== null ? closeVal.toFixed(4) : ''}' class='chart-hit'/>`);
+      pointerOverlays.push(`<rect x='${pointerX.toFixed(2)}' y='${pointerY.toFixed(2)}' width='${pointerWidth.toFixed(2)}' height='${pointerHeight.toFixed(2)}' fill='transparent' data-i='${i}' data-date='${safeLabel}' data-price='${closeVal !== null ? closeVal.toFixed(4) : ''}' class='chart-hit'/>`);
     }
 
     const toPath = (arr)=>{
@@ -606,6 +606,8 @@ async function renderMiniChart(symbol, elId, force=false){
           ${ma120Path ? `<polyline fill='none' stroke='#a78bfa' stroke-width='1.4' points='${ma120Path}'/>` : ''}
           <line x1='${pL}' y1='${volTop-1}' x2='${w-pR}' y2='${volTop-1}' stroke='#24304f' stroke-width='1'/>
           ${vols.join('')}
+          <line id='crosshair-v' x1='${pL}' y1='${pT-4}' x2='${pL}' y2='${(volTop+volH+4).toFixed(2)}' stroke='#94a3b8' stroke-width='1' stroke-dasharray='3 3' opacity='0'/>
+          <line id='crosshair-h' x1='${pL}' y1='${pT}' x2='${w-pR}' y2='${pT}' stroke='#94a3b8' stroke-width='1' stroke-dasharray='3 3' opacity='0'/>
           ${pointerOverlays.join('')}
           <text x='${w-pR+4}' y='${(pT+10).toFixed(1)}' fill='#93a4c7' font-size='10'>${maxTxt}</text>
           <text x='${w-pR+4}' y='${(pT+priceH).toFixed(1)}' fill='#93a4c7' font-size='10'>${minTxt}</text>
@@ -620,10 +622,16 @@ async function renderMiniChart(symbol, elId, force=false){
 
     const wrapper = el.querySelector('.chart-wrapper');
     const tooltip = el.querySelector('.chart-tooltip');
+    const crossV = el.querySelector('#crosshair-v');
+    const crossH = el.querySelector('#crosshair-h');
     if(wrapper && tooltip){
       const hits = wrapper.querySelectorAll('.chart-hit');
-      const hideTooltip = () => { tooltip.style.display = 'none'; };
-      const updateTooltip = (evt, txt) => {
+      const hideTooltip = () => {
+        tooltip.style.display = 'none';
+        if(crossV) crossV.setAttribute('opacity', '0');
+        if(crossH) crossH.setAttribute('opacity', '0');
+      };
+      const updateTooltip = (evt, txt, i) => {
         tooltip.textContent = txt;
         tooltip.style.display = 'block';
         const bounds = wrapper.getBoundingClientRect();
@@ -636,16 +644,32 @@ async function renderMiniChart(symbol, elId, force=false){
         if(top < 4) top = offsetY + 6;
         tooltip.style.left = `${left}px`;
         tooltip.style.top = `${top}px`;
+
+        if(Number.isFinite(i)){
+          const cx = pL + slot*i + slot/2;
+          const cy = y(c[i]);
+          if(crossV){
+            crossV.setAttribute('x1', cx.toFixed(2));
+            crossV.setAttribute('x2', cx.toFixed(2));
+            crossV.setAttribute('opacity', '1');
+          }
+          if(crossH){
+            crossH.setAttribute('y1', cy.toFixed(2));
+            crossH.setAttribute('y2', cy.toFixed(2));
+            crossH.setAttribute('opacity', '1');
+          }
+        }
       };
 
       hits.forEach(hit => {
         const label = hit.dataset.date || '';
         const priceVal = Number(hit.dataset.price);
+        const idx = Number(hit.dataset.i);
         const parts = [];
         if(label) parts.push(`날짜 ${label}`);
         if(Number.isFinite(priceVal)) parts.push(`종가 ${fmt(priceVal)}`);
         const txt = parts.join(' · ') || '날짜 정보 없음';
-        const handler = (evt) => updateTooltip(evt, txt);
+        const handler = (evt) => updateTooltip(evt, txt, idx);
         hit.addEventListener('pointerenter', handler);
         hit.addEventListener('pointermove', handler);
         hit.addEventListener('pointerleave', hideTooltip);
