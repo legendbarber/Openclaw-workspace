@@ -681,8 +681,25 @@ def api_archive_save():
     score_config = payload.get('scoreConfig') if isinstance(payload.get('scoreConfig'), dict) else {'preset': 'default_6_4'}
     key = _report_key(market, candidate_limit, score_config)
     cached = _REPORT_CACHE.get(key)
+
+    # exact score-config key miss 시, 같은 market/limit의 최신 완료 리포트로 fallback
+    if not cached or not cached.get('data'):
+        prefix = f"{market}:{candidate_limit}:"
+        candidates = []
+        for k, v in _REPORT_CACHE.items():
+            if not str(k).startswith(prefix):
+                continue
+            if not isinstance(v, dict) or not v.get('data'):
+                continue
+            ts = float(v.get('ts', 0) or 0)
+            candidates.append((ts, v))
+        if candidates:
+            candidates.sort(key=lambda x: x[0], reverse=True)
+            cached = candidates[0][1]
+
     if not cached or not cached.get('data'):
         return jsonify({'ok': False, 'error': 'report_not_ready'}), 404
+
     report = cached['data']
     item = None
     if report.get('topPick') and str(report['topPick'].get('symbol') or '').upper() == symbol:
