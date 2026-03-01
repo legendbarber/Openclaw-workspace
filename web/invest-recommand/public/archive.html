@@ -94,21 +94,27 @@ function renderCandleChart(target, chart){
     target.innerHTML="<div class='tiny' style='line-height:190px;text-align:center;'>차트 데이터 없음</div>";
     return;
   }
-  const N=Math.min(chart.close.length, 120);
-  const start=chart.close.length-N;
-  const labels=(chart.labels||[]).slice(start);
-  const open=(chart.open||[]).slice(start).map(Number);
-  const high=(chart.high||[]).slice(start).map(Number);
-  const low=(chart.low||[]).slice(start).map(Number);
-  const close=(chart.close||[]).slice(start).map(Number);
+  const fullClose=(chart.close||[]).map(Number);
+  const fullOpen=(chart.open||[]).map(Number);
+  const fullHigh=(chart.high||[]).map(Number);
+  const fullLow=(chart.low||[]).map(Number);
+  const fullLabels=(chart.labels||[]);
+
+  const N=Math.min(fullClose.length, 180);
+  const start=fullClose.length-N;
+  const labels=fullLabels.slice(start);
+  const open=fullOpen.slice(start);
+  const high=fullHigh.slice(start);
+  const low=fullLow.slice(start);
+  const close=fullClose.slice(start);
   if(!open.length||!high.length||!low.length||!close.length){
     target.innerHTML="<div class='tiny' style='line-height:190px;text-align:center;'>차트 데이터 없음</div>";
     return;
   }
 
-  const ma20 = movingAvg(close, 20);
-  const ma60 = movingAvg(close, 60);
-  const ma120 = movingAvg(close, 120);
+  const ma20 = movingAvg(fullClose, 20).slice(start);
+  const ma60 = movingAvg(fullClose, 60).slice(start);
+  const ma120 = movingAvg(fullClose, 120).slice(start);
   const min = Math.min(...low.filter(Number.isFinite));
   const max = Math.max(...high.filter(Number.isFinite));
   const span = (max-min) || 1;
