@@ -167,6 +167,8 @@ function renderCandleChart(target, chart){
         <path d='${maPath(ma20)}' fill='none' stroke='#f59e0b' stroke-width='1.5'/>
         <path d='${maPath(ma60)}' fill='none' stroke='#60a5fa' stroke-width='1.5'/>
         <path d='${maPath(ma120)}' fill='none' stroke='#a78bfa' stroke-width='1.5'/>
+        <line id='crosshair-v' x1='${left}' y1='${top}' x2='${left}' y2='${top+plotH}' stroke='#94a3b8' stroke-width='1' stroke-dasharray='3 3' opacity='0'/>
+        <line id='crosshair-h' x1='${left}' y1='${top}' x2='${width-right}' y2='${top}' stroke='#94a3b8' stroke-width='1' stroke-dasharray='3 3' opacity='0'/>
         ${ticks}
         ${hitRects}
       </svg>
@@ -177,14 +179,34 @@ function renderCandleChart(target, chart){
 
   const wrapper = target.querySelector('.chart-wrapper');
   const tooltip = target.querySelector('.chart-tooltip');
+  const crossV = target.querySelector('#crosshair-v');
+  const crossH = target.querySelector('#crosshair-h');
   if(!wrapper || !tooltip) return;
 
-  const hideTooltip = ()=>{ tooltip.style.display='none'; };
+  const hideTooltip = ()=>{
+    tooltip.style.display='none';
+    if(crossV) crossV.setAttribute('opacity','0');
+    if(crossH) crossH.setAttribute('opacity','0');
+  };
   const showTooltip = (evt, i)=>{
     if(i<0 || i>=labels.length) return;
     const d = labels[i] || '-';
     tooltip.textContent = d;
     tooltip.style.display='block';
+
+    const cx = x(i);
+    const cy = y(close[i]);
+    if(crossV){
+      crossV.setAttribute('x1', cx.toFixed(2));
+      crossV.setAttribute('x2', cx.toFixed(2));
+      crossV.setAttribute('opacity','1');
+    }
+    if(crossH){
+      crossH.setAttribute('y1', cy.toFixed(2));
+      crossH.setAttribute('y2', cy.toFixed(2));
+      crossH.setAttribute('opacity','1');
+    }
+
     const wrapRect = wrapper.getBoundingClientRect();
     const tipRect = tooltip.getBoundingClientRect();
     const ex = evt.clientX - wrapRect.left;
