@@ -975,10 +975,10 @@ def _get_symbol_theme_meta(symbol: str) -> Dict:
 SCORE_PRESETS: Dict[str, Dict[str, float]] = {
     # 사용자 기본 요청: 종목점수:테마점수 = 6:4
     "default_6_4": {
-        "stock": 0.60,
-        "theme": 0.40,
+        "stock": 0.80,
+        "theme": 0.00,
         "news": 0.00,
-        "technical": 0.00,
+        "technical": 0.20,
         "confidence": 0.10,
         "valuation": 0.20,
     },

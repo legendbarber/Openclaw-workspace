@@ -63,13 +63,13 @@
 
     <div class="card">
       <b>점수식 설정</b>
-      <div class="tiny">추천 점수식 비율(기본): 종목점수 6 : 테마점수 4</div>
+      <div class="tiny">추천 점수식 비율(기본): 종목점수 8 : 기술점수 2 (테마/뉴스 기본 0)</div>
       <div class="tiny" style="margin-top:4px">아래에서 항목별 가중치를 직접 설정한 뒤 <b>적용</b> 버튼을 누르면 재계산됩니다.</div>
       <div class="score-grid">
-        <div class="score-cell"><label><input type="checkbox" id="useStock" checked> 종목점수</label><br><input id="wStock" type="number" step="0.05" min="0" value="0.6"></div>
-        <div class="score-cell"><label><input type="checkbox" id="useTheme" checked> 테마점수</label><br><input id="wTheme" type="number" step="0.05" min="0" value="0.4"></div>
+        <div class="score-cell"><label><input type="checkbox" id="useStock" checked> 종목점수</label><br><input id="wStock" type="number" step="0.05" min="0" value="0.8"></div>
+        <div class="score-cell"><label><input type="checkbox" id="useTheme"> 테마점수</label><br><input id="wTheme" type="number" step="0.05" min="0" value="0.0"></div>
         <div class="score-cell"><label><input type="checkbox" id="useNews"> 뉴스점수</label><br><input id="wNews" type="number" step="0.05" min="0" value="0.0"></div>
-        <div class="score-cell"><label><input type="checkbox" id="useTechnical"> 기술점수</label><br><input id="wTechnical" type="number" step="0.05" min="0" value="0.0"></div>
+        <div class="score-cell"><label><input type="checkbox" id="useTechnical" checked> 기술점수</label><br><input id="wTechnical" type="number" step="0.05" min="0" value="0.2"></div>
         <div class="score-cell"><label>신뢰도(Conf) 반영</label><br><input id="wConfidence" type="number" step="0.01" min="0" max="0.5" value="0.10"></div>
         <div class="score-cell"><label><input type="checkbox" id="useValuation" checked> 밸류갭(현재가-목표가) 반영</label><br><input id="wValuation" type="number" step="0.05" min="0" value="0.20"></div>
       </div>
@@ -173,7 +173,7 @@ function loadLimitPref(){
 }
 
 const SCORE_DEFAULTS = {
-  wStock:0.6, wTheme:0.4, wNews:0.0, wTechnical:0.0, wConfidence:0.10, wValuation:0.20,
+  wStock:0.8, wTheme:0.0, wNews:0.0, wTechnical:0.2, wConfidence:0.10, wValuation:0.20,
   swStockReport:1.0, swStockMomentum:0.0, swStockLiquidity:0.0, swStockRisk:0.0,
   swThemeBlended:1.0, swThemeScore:0.0, swThemeLeader:0.0,
   swNewsCrowd:1.0, swNewsHeadline:0.0, swNewsTone:0.0,
@@ -193,10 +193,10 @@ function getScoreConfig(){
   const asWeight = (useId, wId, dv=0)=> document.getElementById(useId)?.checked ? num(wId, dv) : 0;
   return {
     preset: 'default_6_4',
-    wStock: asWeight('useStock','wStock',0.6),
-    wTheme: asWeight('useTheme','wTheme',0.4),
+    wStock: asWeight('useStock','wStock',0.8),
+    wTheme: asWeight('useTheme','wTheme',0.0),
     wNews: asWeight('useNews','wNews',0),
-    wTechnical: asWeight('useTechnical','wTechnical',0),
+    wTechnical: asWeight('useTechnical','wTechnical',0.2),
     wConfidence: num('wConfidence',0.1),
     wValuation: asWeight('useValuation','wValuation',0.2),
     swStockReport: num('swStockReport',1),

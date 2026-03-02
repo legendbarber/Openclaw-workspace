@@ -178,10 +178,10 @@ def _parse_score_config_from_request() -> dict:
     return {
         'preset': preset,
         'components': {
-            'stock': _num('wStock', 0.6),
-            'theme': _num('wTheme', 0.4),
+            'stock': _num('wStock', 0.8),
+            'theme': _num('wTheme', 0.0),
             'news': _num('wNews', 0.0),
-            'technical': _num('wTechnical', 0.0),
+            'technical': _num('wTechnical', 0.2),
         },
         'subcomponents': {
             'stock': {
