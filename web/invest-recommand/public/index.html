@@ -71,7 +71,7 @@
         <div class="score-cell"><label><input type="checkbox" id="useNews"> 뉴스점수</label><br><input id="wNews" type="number" step="0.05" min="0" value="0.0"></div>
         <div class="score-cell"><label><input type="checkbox" id="useTechnical"> 기술점수</label><br><input id="wTechnical" type="number" step="0.05" min="0" value="0.0"></div>
         <div class="score-cell"><label>신뢰도(Conf) 반영</label><br><input id="wConfidence" type="number" step="0.01" min="0" max="0.5" value="0.10"></div>
-        <div class="score-cell"><label>밸류갭 배율</label><br><input id="wValuation" type="number" step="0.05" min="0" value="0.20"></div>
+        <div class="score-cell"><label><input type="checkbox" id="useValuation" checked> 밸류갭(현재가-목표가) 반영</label><br><input id="wValuation" type="number" step="0.05" min="0" value="0.20"></div>
       </div>
       <div style="margin-top:10px"><button onclick="applyScoreSettings()">점수식 적용</button></div>
     </div>
@@ -170,7 +170,7 @@ function getScoreConfig(){
     wNews: asWeight('useNews','wNews',0),
     wTechnical: asWeight('useTechnical','wTechnical',0),
     wConfidence: num('wConfidence',0.1),
-    wValuation: num('wValuation',0.2),
+    wValuation: asWeight('useValuation','wValuation',0.2),
   };
 }
 
@@ -194,6 +194,7 @@ function loadScorePref(){
     document.getElementById('useTheme').checked = (Number(c.wTheme ?? SCORE_DEFAULTS.wTheme)||0) > 0;
     document.getElementById('useNews').checked = (Number(c.wNews ?? SCORE_DEFAULTS.wNews)||0) > 0;
     document.getElementById('useTechnical').checked = (Number(c.wTechnical ?? SCORE_DEFAULTS.wTechnical)||0) > 0;
+    document.getElementById('useValuation').checked = (Number(c.wValuation ?? SCORE_DEFAULTS.wValuation)||0) > 0;
   }catch(_){
     document.getElementById('wStock').value = SCORE_DEFAULTS.wStock;
     document.getElementById('wTheme').value = SCORE_DEFAULTS.wTheme;
@@ -205,6 +206,7 @@ function loadScorePref(){
     document.getElementById('useTheme').checked = true;
     document.getElementById('useNews').checked = false;
     document.getElementById('useTechnical').checked = false;
+    document.getElementById('useValuation').checked = true;
   }
 }
 

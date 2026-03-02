@@ -1052,10 +1052,12 @@ def _normalize_score_config(score_config: Dict[str, Any] | None) -> Dict[str, An
 
 def _score_methodology_text(cfg: Dict[str, Any]) -> str:
     c = cfg.get("components", {})
+    v = float(cfg.get('valuation', 0) or 0)
+    vtxt = f"valuationScale={v:.2f}" if v > 0 else "valuation=excluded"
     return (
         "S=(1-conf)*Core+conf*Confidence; "
         f"Core={c.get('stock', 0):.2f}Stock+{c.get('theme', 0):.2f}Theme+{c.get('news', 0):.2f}News+{c.get('technical', 0):.2f}Technical; "
-        f"conf={cfg.get('confidence', 0):.2f}; valuation=excluded; "
+        f"conf={cfg.get('confidence', 0):.2f}; {vtxt}; "
         "Technical=direction/cross/distance, KR theme=Naver theme, no clipping"
     )
 
@@ -1126,7 +1128,18 @@ def _apply_runtime_theme_scores(rows: List[Dict], score_config: Dict[str, Any] |
                 + float(w.get("technical", 0.0)) * tech_s
             )
             conf_w = float(max(0.0, cfg.get("confidence", 0.10)))
-            final_score = (1.0 - conf_w) * core + conf_w * conf
+            score_pre_valuation = (1.0 - conf_w) * core + conf_w * conf
+
+            # 현재가-목표가 괴리(valuation) 옵션 반영: UI wValuation > 0 일 때만 적용
+            val_scale = float(max(0.0, cfg.get("valuation", 0.0)))
+            up = (r.get("components", {}).get("reportConsensus", {}) or {}).get("upsidePct")
+            cap_range_pct = 30.0
+            val_adj = 0.0
+            if val_scale > 0 and isinstance(up, (int, float)):
+                clipped_up = max(-cap_range_pct, min(cap_range_pct, float(up)))
+                val_adj = clipped_up * val_scale
+
+            final_score = score_pre_valuation + val_adj
 
             r.setdefault("components", {})["scoreMix"] = {
                 "stockWeight": round(float(w.get("stock", 0.0)), 4),
@@ -1134,18 +1147,18 @@ def _apply_runtime_theme_scores(rows: List[Dict], score_config: Dict[str, Any] |
                 "newsWeight": round(float(w.get("news", 0.0)), 4),
                 "technicalWeight": round(float(w.get("technical", 0.0)), 4),
                 "confidenceWeight": round(float(conf_w), 4),
-                "valuationScale": round(float(cfg.get("valuation", 0.20)), 4),
+                "valuationScale": round(float(val_scale), 4),
                 "coreScore": round(float(core), 2),
                 "confidence": round(float(conf), 2),
+                "preValuationScore": round(float(score_pre_valuation), 2),
+                "valuationAdjustment": round(float(val_adj), 2),
             }
 
-            # 사용자 요청: 현재가-목표가 괴리(valuation)는 종합점수에 반영하지 않음
-            up = (r.get("components", {}).get("reportConsensus", {}) or {}).get("upsidePct")
             r.setdefault("components", {})["valuation"] = {
                 "upsidePct": round(float(up), 2) if isinstance(up, (int, float)) else None,
-                "adjustment": 0.0,
-                "capRangePct": None,
-                "enabled": False,
+                "adjustment": round(float(val_adj), 2),
+                "capRangePct": cap_range_pct,
+                "enabled": bool(val_scale > 0),
             }
 
             r["score"] = round(float(final_score), 2)
