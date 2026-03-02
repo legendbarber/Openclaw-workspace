@@ -73,6 +73,28 @@
         <div class="score-cell"><label>신뢰도(Conf) 반영</label><br><input id="wConfidence" type="number" step="0.01" min="0" max="0.5" value="0.10"></div>
         <div class="score-cell"><label><input type="checkbox" id="useValuation" checked> 밸류갭(현재가-목표가) 반영</label><br><input id="wValuation" type="number" step="0.05" min="0" value="0.20"></div>
       </div>
+      <details style="margin-top:10px">
+        <summary>세부 가중치 슬라이더 (종목/테마/뉴스/기술)</summary>
+        <div class="tiny" style="margin:6px 0">각 영역 내부 가중치는 자동 정규화됩니다(합계가 1이 아니어도 됨).</div>
+        <div class="score-grid">
+          <div class="score-cell"><label>종목-리포트</label><br><input id="swStockReport" type="range" min="0" max="1" step="0.05" value="1"><span id="swStockReportVal">1.00</span></div>
+          <div class="score-cell"><label>종목-모멘텀</label><br><input id="swStockMomentum" type="range" min="0" max="1" step="0.05" value="0"><span id="swStockMomentumVal">0.00</span></div>
+          <div class="score-cell"><label>종목-유동성</label><br><input id="swStockLiquidity" type="range" min="0" max="1" step="0.05" value="0"><span id="swStockLiquidityVal">0.00</span></div>
+          <div class="score-cell"><label>종목-리스크</label><br><input id="swStockRisk" type="range" min="0" max="1" step="0.05" value="0"><span id="swStockRiskVal">0.00</span></div>
+
+          <div class="score-cell"><label>테마-혼합(기본)</label><br><input id="swThemeBlended" type="range" min="0" max="1" step="0.05" value="1"><span id="swThemeBlendedVal">1.00</span></div>
+          <div class="score-cell"><label>테마-themeScore</label><br><input id="swThemeScore" type="range" min="0" max="1" step="0.05" value="0"><span id="swThemeScoreVal">0.00</span></div>
+          <div class="score-cell"><label>테마-leaderScore</label><br><input id="swThemeLeader" type="range" min="0" max="1" step="0.05" value="0"><span id="swThemeLeaderVal">0.00</span></div>
+
+          <div class="score-cell"><label>뉴스-crowdScore</label><br><input id="swNewsCrowd" type="range" min="0" max="1" step="0.05" value="1"><span id="swNewsCrowdVal">1.00</span></div>
+          <div class="score-cell"><label>뉴스-헤드라인수</label><br><input id="swNewsHeadline" type="range" min="0" max="1" step="0.05" value="0"><span id="swNewsHeadlineVal">0.00</span></div>
+          <div class="score-cell"><label>뉴스-tone</label><br><input id="swNewsTone" type="range" min="0" max="1" step="0.05" value="0"><span id="swNewsToneVal">0.00</span></div>
+
+          <div class="score-cell"><label>기술-technicalScore</label><br><input id="swTechScore" type="range" min="0" max="1" step="0.05" value="1"><span id="swTechScoreVal">1.00</span></div>
+          <div class="score-cell"><label>기술-모멘텀추세</label><br><input id="swTechTrend" type="range" min="0" max="1" step="0.05" value="0"><span id="swTechTrendVal">0.00</span></div>
+          <div class="score-cell"><label>기술-리스크</label><br><input id="swTechRisk" type="range" min="0" max="1" step="0.05" value="0"><span id="swTechRiskVal">0.00</span></div>
+        </div>
+      </details>
       <div style="margin-top:10px"><button onclick="applyScoreSettings()">점수식 적용</button></div>
     </div>
 
@@ -150,7 +172,13 @@ function loadLimitPref(){
   if(sel) sel.value = String(v);
 }
 
-const SCORE_DEFAULTS = { wStock:0.6, wTheme:0.4, wNews:0.0, wTechnical:0.0, wConfidence:0.10, wValuation:0.20 };
+const SCORE_DEFAULTS = {
+  wStock:0.6, wTheme:0.4, wNews:0.0, wTechnical:0.0, wConfidence:0.10, wValuation:0.20,
+  swStockReport:1.0, swStockMomentum:0.0, swStockLiquidity:0.0, swStockRisk:0.0,
+  swThemeBlended:1.0, swThemeScore:0.0, swThemeLeader:0.0,
+  swNewsCrowd:1.0, swNewsHeadline:0.0, swNewsTone:0.0,
+  swTechScore:1.0, swTechTrend:0.0, swTechRisk:0.0,
+};
 
 async function applyScoreSettings(){
   saveScorePref();
@@ -171,6 +199,19 @@ function getScoreConfig(){
     wTechnical: asWeight('useTechnical','wTechnical',0),
     wConfidence: num('wConfidence',0.1),
     wValuation: asWeight('useValuation','wValuation',0.2),
+    swStockReport: num('swStockReport',1),
+    swStockMomentum: num('swStockMomentum',0),
+    swStockLiquidity: num('swStockLiquidity',0),
+    swStockRisk: num('swStockRisk',0),
+    swThemeBlended: num('swThemeBlended',1),
+    swThemeScore: num('swThemeScore',0),
+    swThemeLeader: num('swThemeLeader',0),
+    swNewsCrowd: num('swNewsCrowd',1),
+    swNewsHeadline: num('swNewsHeadline',0),
+    swNewsTone: num('swNewsTone',0),
+    swTechScore: num('swTechScore',1),
+    swTechTrend: num('swTechTrend',0),
+    swTechRisk: num('swTechRisk',0),
   };
 }
 
@@ -181,33 +222,36 @@ function saveScorePref(){
 
 function loadScorePref(){
   const m = getMarket();
+  let c = SCORE_DEFAULTS;
   try{
     const raw = localStorage.getItem(`invest_score_${m}`);
-    const c = raw ? JSON.parse(raw) : SCORE_DEFAULTS;
-    document.getElementById('wStock').value = c.wStock ?? SCORE_DEFAULTS.wStock;
-    document.getElementById('wTheme').value = c.wTheme ?? SCORE_DEFAULTS.wTheme;
-    document.getElementById('wNews').value = c.wNews ?? SCORE_DEFAULTS.wNews;
-    document.getElementById('wTechnical').value = c.wTechnical ?? SCORE_DEFAULTS.wTechnical;
-    document.getElementById('wConfidence').value = c.wConfidence ?? SCORE_DEFAULTS.wConfidence;
-    document.getElementById('wValuation').value = c.wValuation ?? SCORE_DEFAULTS.wValuation;
-    document.getElementById('useStock').checked = (Number(c.wStock ?? SCORE_DEFAULTS.wStock)||0) > 0;
-    document.getElementById('useTheme').checked = (Number(c.wTheme ?? SCORE_DEFAULTS.wTheme)||0) > 0;
-    document.getElementById('useNews').checked = (Number(c.wNews ?? SCORE_DEFAULTS.wNews)||0) > 0;
-    document.getElementById('useTechnical').checked = (Number(c.wTechnical ?? SCORE_DEFAULTS.wTechnical)||0) > 0;
-    document.getElementById('useValuation').checked = (Number(c.wValuation ?? SCORE_DEFAULTS.wValuation)||0) > 0;
-  }catch(_){
-    document.getElementById('wStock').value = SCORE_DEFAULTS.wStock;
-    document.getElementById('wTheme').value = SCORE_DEFAULTS.wTheme;
-    document.getElementById('wNews').value = SCORE_DEFAULTS.wNews;
-    document.getElementById('wTechnical').value = SCORE_DEFAULTS.wTechnical;
-    document.getElementById('wConfidence').value = SCORE_DEFAULTS.wConfidence;
-    document.getElementById('wValuation').value = SCORE_DEFAULTS.wValuation;
-    document.getElementById('useStock').checked = true;
-    document.getElementById('useTheme').checked = true;
-    document.getElementById('useNews').checked = false;
-    document.getElementById('useTechnical').checked = false;
-    document.getElementById('useValuation').checked = true;
-  }
+    c = raw ? JSON.parse(raw) : SCORE_DEFAULTS;
+  }catch(_){ c = SCORE_DEFAULTS; }
+
+  Object.keys(SCORE_DEFAULTS).forEach((k)=>{
+    const el = document.getElementById(k);
+    if(el) el.value = (c[k] ?? SCORE_DEFAULTS[k]);
+  });
+
+  document.getElementById('useStock').checked = (Number(c.wStock ?? SCORE_DEFAULTS.wStock)||0) > 0;
+  document.getElementById('useTheme').checked = (Number(c.wTheme ?? SCORE_DEFAULTS.wTheme)||0) > 0;
+  document.getElementById('useNews').checked = (Number(c.wNews ?? SCORE_DEFAULTS.wNews)||0) > 0;
+  document.getElementById('useTechnical').checked = (Number(c.wTechnical ?? SCORE_DEFAULTS.wTechnical)||0) > 0;
+  document.getElementById('useValuation').checked = (Number(c.wValuation ?? SCORE_DEFAULTS.wValuation)||0) > 0;
+
+  bindSubweightLabels();
+}
+
+function bindSubweightLabels(){
+  ['swStockReport','swStockMomentum','swStockLiquidity','swStockRisk','swThemeBlended','swThemeScore','swThemeLeader','swNewsCrowd','swNewsHeadline','swNewsTone','swTechScore','swTechTrend','swTechRisk']
+    .forEach((id)=>{
+      const el = document.getElementById(id);
+      const out = document.getElementById(id+'Val');
+      if(!el || !out) return;
+      const apply = ()=>{ out.textContent = Number(el.value||0).toFixed(2); };
+      el.oninput = apply;
+      apply();
+    });
 }
 
 function scoreQueryString(){
@@ -220,6 +264,19 @@ function scoreQueryString(){
   p.set('wTechnical', String(c.wTechnical));
   p.set('wConfidence', String(c.wConfidence));
   p.set('wValuation', String(c.wValuation));
+  p.set('swStockReport', String(c.swStockReport));
+  p.set('swStockMomentum', String(c.swStockMomentum));
+  p.set('swStockLiquidity', String(c.swStockLiquidity));
+  p.set('swStockRisk', String(c.swStockRisk));
+  p.set('swThemeBlended', String(c.swThemeBlended));
+  p.set('swThemeScore', String(c.swThemeScore));
+  p.set('swThemeLeader', String(c.swThemeLeader));
+  p.set('swNewsCrowd', String(c.swNewsCrowd));
+  p.set('swNewsHeadline', String(c.swNewsHeadline));
+  p.set('swNewsTone', String(c.swNewsTone));
+  p.set('swTechScore', String(c.swTechScore));
+  p.set('swTechTrend', String(c.swTechTrend));
+  p.set('swTechRisk', String(c.swTechRisk));
   return p.toString();
 }
 

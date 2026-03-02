@@ -183,6 +183,29 @@ def _parse_score_config_from_request() -> dict:
             'news': _num('wNews', 0.0),
             'technical': _num('wTechnical', 0.0),
         },
+        'subcomponents': {
+            'stock': {
+                'reportConsensus': _num('swStockReport', 1.0),
+                'momentum': _num('swStockMomentum', 0.0),
+                'liquidity': _num('swStockLiquidity', 0.0),
+                'risk': _num('swStockRisk', 0.0),
+            },
+            'theme': {
+                'blended': _num('swThemeBlended', 1.0),
+                'themeScore': _num('swThemeScore', 0.0),
+                'leaderScore': _num('swThemeLeader', 0.0),
+            },
+            'news': {
+                'crowdScore': _num('swNewsCrowd', 1.0),
+                'headlineCount': _num('swNewsHeadline', 0.0),
+                'tone': _num('swNewsTone', 0.0),
+            },
+            'technical': {
+                'technicalScore': _num('swTechScore', 1.0),
+                'momentumTrend': _num('swTechTrend', 0.0),
+                'riskScore': _num('swTechRisk', 0.0),
+            },
+        },
         'confidence': _num('wConfidence', 0.10),
         'valuation': _num('wValuation', 0.20),
     }
@@ -191,6 +214,11 @@ def _parse_score_config_from_request() -> dict:
 def _score_config_key(score_config: dict) -> str:
     sc = score_config or {}
     c = sc.get('components') or {}
+    sub = sc.get('subcomponents') or {}
+    s_stock = sub.get('stock') or {}
+    s_theme = sub.get('theme') or {}
+    s_news = sub.get('news') or {}
+    s_tech = sub.get('technical') or {}
     return (
         f"{sc.get('preset', 'default_6_4')}"
         f":{float(c.get('stock', 0.0)):.4f}"
@@ -199,6 +227,19 @@ def _score_config_key(score_config: dict) -> str:
         f":{float(c.get('technical', 0.0)):.4f}"
         f":{float(sc.get('confidence', 0.0)):.4f}"
         f":{float(sc.get('valuation', 0.0)):.4f}"
+        f":{float(s_stock.get('reportConsensus', 0.0)):.3f}"
+        f":{float(s_stock.get('momentum', 0.0)):.3f}"
+        f":{float(s_stock.get('liquidity', 0.0)):.3f}"
+        f":{float(s_stock.get('risk', 0.0)):.3f}"
+        f":{float(s_theme.get('blended', 0.0)):.3f}"
+        f":{float(s_theme.get('themeScore', 0.0)):.3f}"
+        f":{float(s_theme.get('leaderScore', 0.0)):.3f}"
+        f":{float(s_news.get('crowdScore', 0.0)):.3f}"
+        f":{float(s_news.get('headlineCount', 0.0)):.3f}"
+        f":{float(s_news.get('tone', 0.0)):.3f}"
+        f":{float(s_tech.get('technicalScore', 0.0)):.3f}"
+        f":{float(s_tech.get('momentumTrend', 0.0)):.3f}"
+        f":{float(s_tech.get('riskScore', 0.0)):.3f}"
     )
 
 

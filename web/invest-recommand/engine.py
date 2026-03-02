@@ -1002,6 +1002,13 @@ SCORE_PRESETS: Dict[str, Dict[str, float]] = {
     },
 }
 
+SCORE_SUBCOMPONENT_DEFAULTS: Dict[str, Dict[str, float]] = {
+    "stock": {"reportConsensus": 1.0, "momentum": 0.0, "liquidity": 0.0, "risk": 0.0},
+    "theme": {"blended": 1.0, "themeScore": 0.0, "leaderScore": 0.0},
+    "news": {"crowdScore": 1.0, "headlineCount": 0.0, "tone": 0.0},
+    "technical": {"technicalScore": 1.0, "momentumTrend": 0.0, "riskScore": 0.0},
+}
+
 
 def _normalize_score_config(score_config: Dict[str, Any] | None) -> Dict[str, Any]:
     raw = score_config or {}
@@ -1042,9 +1049,30 @@ def _normalize_score_config(score_config: Dict[str, Any] | None) -> Dict[str, An
     confidence_weight = max(0.0, _num("confidence"))
     valuation_scale = max(0.0, _num("valuation"))
 
+    raw_sub = raw.get("subcomponents") if isinstance(raw.get("subcomponents"), dict) else {}
+    out_sub: Dict[str, Dict[str, float]] = {}
+    for domain, defaults in SCORE_SUBCOMPONENT_DEFAULTS.items():
+        incoming = raw_sub.get(domain) if isinstance(raw_sub.get(domain), dict) else {}
+        cur: Dict[str, float] = {}
+        for k, dv in defaults.items():
+            vv = incoming.get(k, dv)
+            try:
+                cur[k] = max(0.0, float(vv))
+            except Exception:
+                cur[k] = float(dv)
+        s = sum(cur.values())
+        if s <= 0:
+            cur = {kk: float(vv) for kk, vv in defaults.items()}
+            s = sum(cur.values())
+        if s <= 0:
+            cur = {kk: (1.0 if i == 0 else 0.0) for i, kk in enumerate(defaults.keys())}
+            s = 1.0
+        out_sub[domain] = {kk: (vv / s) for kk, vv in cur.items()}
+
     return {
         "preset": preset,
         "components": out_comp,
+        "subcomponents": out_sub,
         "confidence": confidence_weight,
         "valuation": valuation_scale,
     }
@@ -1116,16 +1144,57 @@ def _apply_runtime_theme_scores(rows: List[Dict], score_config: Dict[str, Any] |
             r["components"]["theme"] = th
 
             # 사용자 설정 비율 반영 (UI에서 가중치/포함항목 조정)
+            comp = r.get("components", {}) or {}
             base = float(r.get("scoreBase", r.get("score", 50.0)))
-            news_s = float((r.get("components", {}).get("crowd", {}) or {}).get("score", 50.0))
-            tech_s = float((r.get("components", {}).get("technical", {}) or {}).get("score", 50.0))
+            momentum_s = float((comp.get("momentum", {}) or {}).get("score", 50.0))
+            liquidity_s = float(comp.get("liquidityScore", 50.0))
+            risk_s = float((comp.get("risk", {}) or {}).get("score", 50.0))
+            news_comp = comp.get("crowd", {}) or {}
+            news_s = float(news_comp.get("score", 50.0))
+            headline_count = float(news_comp.get("headlineCount", 0.0) or 0.0)
+            headline_s = max(0.0, min(100.0, (headline_count / 8.0) * 100.0))
+            tone = float(news_comp.get("tone", 0.0) or 0.0)
+            tone_s = max(0.0, min(100.0, 50.0 + tone * 10.0))
+            tech_obj = comp.get("technical", {}) or {}
+            tech_s = float(tech_obj.get("score", 50.0))
+            trend_boost = float((comp.get("momentum", {}) or {}).get("trendBoost", 0.0) or 0.0)
+            tech_trend_s = max(0.0, min(100.0, 50.0 + trend_boost * 3.0))
             conf = float(r.get("confidence", 50.0))
+
+            sw = cfg.get("subcomponents", {}) or {}
+            sw_stock = sw.get("stock", SCORE_SUBCOMPONENT_DEFAULTS["stock"]) or SCORE_SUBCOMPONENT_DEFAULTS["stock"]
+            sw_theme = sw.get("theme", SCORE_SUBCOMPONENT_DEFAULTS["theme"]) or SCORE_SUBCOMPONENT_DEFAULTS["theme"]
+            sw_news = sw.get("news", SCORE_SUBCOMPONENT_DEFAULTS["news"]) or SCORE_SUBCOMPONENT_DEFAULTS["news"]
+            sw_tech = sw.get("technical", SCORE_SUBCOMPONENT_DEFAULTS["technical"]) or SCORE_SUBCOMPONENT_DEFAULTS["technical"]
+
+            stock_domain = (
+                float(sw_stock.get("reportConsensus", 0.0)) * base
+                + float(sw_stock.get("momentum", 0.0)) * momentum_s
+                + float(sw_stock.get("liquidity", 0.0)) * liquidity_s
+                + float(sw_stock.get("risk", 0.0)) * risk_s
+            )
+            theme_domain = (
+                float(sw_theme.get("blended", 0.0)) * float(th.get("score", 50.0))
+                + float(sw_theme.get("themeScore", 0.0)) * float(th.get("themeScore", 50.0))
+                + float(sw_theme.get("leaderScore", 0.0)) * float(th.get("leaderScore", 50.0))
+            )
+            news_domain = (
+                float(sw_news.get("crowdScore", 0.0)) * news_s
+                + float(sw_news.get("headlineCount", 0.0)) * headline_s
+                + float(sw_news.get("tone", 0.0)) * tone_s
+            )
+            technical_domain = (
+                float(sw_tech.get("technicalScore", 0.0)) * tech_s
+                + float(sw_tech.get("momentumTrend", 0.0)) * tech_trend_s
+                + float(sw_tech.get("riskScore", 0.0)) * risk_s
+            )
+
             w = cfg.get("components", {})
             core = (
-                float(w.get("stock", 0.0)) * base
-                + float(w.get("theme", 0.0)) * float(th.get("score", 50.0))
-                + float(w.get("news", 0.0)) * news_s
-                + float(w.get("technical", 0.0)) * tech_s
+                float(w.get("stock", 0.0)) * stock_domain
+                + float(w.get("theme", 0.0)) * theme_domain
+                + float(w.get("news", 0.0)) * news_domain
+                + float(w.get("technical", 0.0)) * technical_domain
             )
             conf_w = float(max(0.0, cfg.get("confidence", 0.10)))
             score_pre_valuation = (1.0 - conf_w) * core + conf_w * conf
@@ -1148,6 +1217,16 @@ def _apply_runtime_theme_scores(rows: List[Dict], score_config: Dict[str, Any] |
                 "technicalWeight": round(float(w.get("technical", 0.0)), 4),
                 "confidenceWeight": round(float(conf_w), 4),
                 "valuationScale": round(float(val_scale), 4),
+                "stockDomainScore": round(float(stock_domain), 2),
+                "themeDomainScore": round(float(theme_domain), 2),
+                "newsDomainScore": round(float(news_domain), 2),
+                "technicalDomainScore": round(float(technical_domain), 2),
+                "subweights": {
+                    "stock": {k: round(float(v), 4) for k, v in sw_stock.items()},
+                    "theme": {k: round(float(v), 4) for k, v in sw_theme.items()},
+                    "news": {k: round(float(v), 4) for k, v in sw_news.items()},
+                    "technical": {k: round(float(v), 4) for k, v in sw_tech.items()},
+                },
                 "coreScore": round(float(core), 2),
                 "confidence": round(float(conf), 2),
                 "preValuationScore": round(float(score_pre_valuation), 2),
