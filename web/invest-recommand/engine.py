@@ -622,6 +622,7 @@ def _consensus_from_naver_or_hk(symbol: str, name: str | None = None) -> Dict:
 
             # 목록 표의 목표주가 컬럼 우선 사용 (예: 1,550,000)
             row_target = None
+            target_added_for_row = False
             if len(cols) >= 3:
                 m_col_tp = re.search(r"([0-9][0-9,]{3,})", cols[2] or "")
                 if m_col_tp:
@@ -632,6 +633,7 @@ def _consensus_from_naver_or_hk(symbol: str, name: str | None = None) -> Dict:
             if isinstance(row_target, (int, float)) and row_target > 0:
                 targets.append(float(row_target))
                 target_ages.append(age_days)
+                target_added_for_row = True
 
             # 컬럼이 비어 있으면 텍스트에서 목표가 추출
             m_tp = None if row_target else (
@@ -643,6 +645,7 @@ def _consensus_from_naver_or_hk(symbol: str, name: str | None = None) -> Dict:
                 try:
                     targets.append(float(m_tp.group(1).replace(",", "")))
                     target_ages.append(age_days)
+                    target_added_for_row = True
                 except Exception:
                     pass
 
@@ -653,15 +656,16 @@ def _consensus_from_naver_or_hk(symbol: str, name: str | None = None) -> Dict:
                     break
 
             # 목록에 값이 없으면 markets view 페이지에서 TARGET_STOCK_PRICES/GRADE_VALUE 보강
-            if m_idx and (not m_tp or not rec_text):
+            if m_idx and ((not target_added_for_row) or (not rec_text)):
                 extra = _hankyung_view_fields(m_idx.group(1))
                 x_tp = extra.get("TARGET_STOCK_PRICES")
-                if (not m_tp) and isinstance(x_tp, (int, float, str)):
+                if (not target_added_for_row) and isinstance(x_tp, (int, float, str)):
                     try:
                         tpv = float(str(x_tp).replace(",", ""))
                         if tpv > 0:
                             targets.append(tpv)
                             target_ages.append(age_days)
+                            target_added_for_row = True
                     except Exception:
                         pass
                 x_grade = str(extra.get("GRADE_VALUE") or "").strip()
