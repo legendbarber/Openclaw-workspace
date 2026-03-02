@@ -949,11 +949,11 @@ async function loadData(){
     </div>
   `;
 
-  const scoreTop30 = (d.rankings || []).slice(0,30);
+  const scoreTop50 = (d.rankings || []).slice(0,50);
 
   document.getElementById('scoreTop5').innerHTML = `
-    <div class='card' style='grid-column:1/-1'><b>📌 종합점수 상위 30 (점수순)</b></div>
-  ` + scoreTop30.map((r, idx) => {
+    <div class='card' style='grid-column:1/-1'><b>📌 종합점수 상위 50 (점수순)</b></div>
+  ` + scoreTop50.map((r, idx) => {
     return `
     <div class='card'>
       <div style='display:flex;align-items:flex-start;justify-content:space-between;gap:8px;flex-wrap:wrap'>
@@ -972,8 +972,8 @@ async function loadData(){
   `}).join('');
 
   await renderMiniChart(x.symbol, 'mini-top', __chartForceNext);
-  for(let i=0;i<scoreTop30.length;i++){
-    await renderMiniChart(scoreTop30[i].symbol, `score-mini-${i}`, __chartForceNext);
+  for(let i=0;i<scoreTop50.length;i++){
+    await renderMiniChart(scoreTop50[i].symbol, `score-mini-${i}`, __chartForceNext);
   }
 
   const c = x.components;
